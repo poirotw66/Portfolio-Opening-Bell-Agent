@@ -94,7 +94,7 @@ export async function generateSingleStockBrief(
 1. 價格動能與技術面暗示 (Price momentum & technical hints)
 2. 關鍵新聞與催化劑 (Key news & catalysts)
 3. 大盤環境影響 (Market context impact)
-4. 今日交易策略/觀察重點 (Trading strategy / Key levels to watch) - **請務必結合使用者的持股數量與均價，提供具體的開盤操作建議（例如：停利、停損、加碼或觀望）**
+4. 今日交易策略/觀察重點 (Trading strategy / Key levels to watch) - **請務必結合使用者的持股數量與均價，提供具體且可執行的開盤操作建議。必須包含明確的建議買進/賣出價位（Buy/Sell points）或停損點（Stop-loss levels）。**
 
 請務必使用繁體中文 (Traditional Chinese) 提供結構化的報告。
 
