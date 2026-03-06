@@ -14,6 +14,7 @@ export interface MarketData {
   error?: string;
   sma20?: number | null;
   rsi14?: number | null;
+  oneMonthPerformance?: number | null;
 }
 
 export interface NewsItem {

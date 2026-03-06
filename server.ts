@@ -67,6 +67,7 @@ async function startServer() {
           
           let sma20 = null;
           let rsi14 = null;
+          let oneMonthPerformance = null;
           
           try {
             const endDate = new Date();
@@ -83,6 +84,13 @@ async function startServer() {
               const closePrices = historical.map(h => h.close);
               sma20 = calculateSMA(closePrices, 20);
               rsi14 = calculateRSI(closePrices, 14);
+              
+              // Calculate 1-month performance (approx 21 trading days)
+              if (closePrices.length >= 21) {
+                const currentPrice = closePrices[closePrices.length - 1];
+                const priceOneMonthAgo = closePrices[closePrices.length - 21];
+                oneMonthPerformance = ((currentPrice - priceOneMonthAgo) / priceOneMonthAgo) * 100;
+              }
             }
           } catch (histErr) {
             console.error(`Error fetching historical data for ${ticker}:`, histErr);
@@ -96,7 +104,8 @@ async function startServer() {
             volume: quote.regularMarketVolume,
             marketCap: quote.marketCap,
             sma20,
-            rsi14
+            rsi14,
+            oneMonthPerformance
           });
         } catch (err) {
           console.error(`Error fetching quote for ${ticker}:`, err);

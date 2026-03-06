@@ -92,9 +92,10 @@ export async function generateSingleStockBrief(
 你的任務是針對單一股票「${ticker}」提供當天的開盤指南。
 請專注於以下幾點：
 1. 價格動能與技術面暗示 (Price momentum & technical hints) - **請分析目前股價與均線(SMA)的關係，以及RSI指標是否顯示超買或超賣。**
-2. 關鍵新聞與催化劑 (Key news & catalysts)
-3. 大盤環境影響 (Market context impact)
-4. 今日交易策略/觀察重點 (Trading strategy / Key levels to watch) - **請務必結合使用者的持股數量與均價，提供具體且可執行的開盤操作建議。必須包含明確的建議買進/賣出價位（Buy/Sell points）或停損點（Stop-loss levels）。**
+2. 歷史績效趨勢 (Historical performance trends) - **請分析該股票過去一個月的歷史績效表現，並說明這對短期走勢的潛在影響。**
+3. 關鍵新聞與催化劑 (Key news & catalysts)
+4. 大盤環境影響 (Market context impact)
+5. 今日交易策略/觀察重點 (Trading strategy / Key levels to watch) - **請務必結合使用者的持股數量與均價，提供具體且可執行的開盤操作建議。必須包含明確的建議買進/賣出價位（Buy/Sell points）或停損點（Stop-loss levels）。**
 
 請務必使用繁體中文 (Traditional Chinese) 提供結構化的報告。
 
@@ -111,6 +112,7 @@ S&P 500 (^GSPC): ${marketContext["^GSPC"]?.changePercent?.toFixed(2)}%
 市值: ${marketData.marketCap}
 ${marketData.sma20 ? `20日均線 (SMA20): $${marketData.sma20.toFixed(2)}` : ''}
 ${marketData.rsi14 ? `14日相對強弱指標 (RSI14): ${marketData.rsi14.toFixed(2)}` : ''}
+${marketData.oneMonthPerformance ? `近一個月歷史績效: ${marketData.oneMonthPerformance.toFixed(2)}%` : ''}
 `;
 
   if (userPosition) {

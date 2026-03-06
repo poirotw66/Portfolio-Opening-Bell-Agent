@@ -80,8 +80,8 @@ export function MarketGrid({ data, positions, isLoading }: Props) {
                 </div>
 
                 {/* Technical Indicators */}
-                {(item.sma20 || item.rsi14) && (
-                  <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-3">
+                {(item.sma20 || item.rsi14 || item.oneMonthPerformance) && (
+                  <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-3 gap-2">
                     {item.sma20 && (
                       <div>
                         <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-1">SMA 20</div>
@@ -97,6 +97,18 @@ export function MarketGrid({ data, positions, isLoading }: Props) {
                           'text-slate-700'
                         }`}>
                           {item.rsi14.toFixed(1)}
+                        </div>
+                      </div>
+                    )}
+                    {item.oneMonthPerformance && (
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-1">近一月</div>
+                        <div className={`text-sm font-medium ${
+                          item.oneMonthPerformance > 0 ? 'text-red-600' : 
+                          item.oneMonthPerformance < 0 ? 'text-emerald-600' : 
+                          'text-slate-700'
+                        }`}>
+                          {item.oneMonthPerformance > 0 ? '+' : ''}{item.oneMonthPerformance.toFixed(2)}%
                         </div>
                       </div>
                     )}
