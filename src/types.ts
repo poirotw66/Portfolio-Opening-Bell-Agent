@@ -12,6 +12,8 @@ export interface MarketData {
   volume: number;
   marketCap: number;
   error?: string;
+  sma20?: number | null;
+  rsi14?: number | null;
 }
 
 export interface NewsItem {

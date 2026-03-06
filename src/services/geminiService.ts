@@ -91,7 +91,7 @@ export async function generateSingleStockBrief(
   let prompt = `你是一個專業的金融分析助理。
 你的任務是針對單一股票「${ticker}」提供當天的開盤指南。
 請專注於以下幾點：
-1. 價格動能與技術面暗示 (Price momentum & technical hints)
+1. 價格動能與技術面暗示 (Price momentum & technical hints) - **請分析目前股價與均線(SMA)的關係，以及RSI指標是否顯示超買或超賣。**
 2. 關鍵新聞與催化劑 (Key news & catalysts)
 3. 大盤環境影響 (Market context impact)
 4. 今日交易策略/觀察重點 (Trading strategy / Key levels to watch) - **請務必結合使用者的持股數量與均價，提供具體且可執行的開盤操作建議。必須包含明確的建議買進/賣出價位（Buy/Sell points）或停損點（Stop-loss levels）。**
@@ -109,6 +109,8 @@ S&P 500 (^GSPC): ${marketContext["^GSPC"]?.changePercent?.toFixed(2)}%
 漲跌幅: ${marketData.changePercent?.toFixed(2)}%
 成交量: ${marketData.volume}
 市值: ${marketData.marketCap}
+${marketData.sma20 ? `20日均線 (SMA20): $${marketData.sma20.toFixed(2)}` : ''}
+${marketData.rsi14 ? `14日相對強弱指標 (RSI14): ${marketData.rsi14.toFixed(2)}` : ''}
 `;
 
   if (userPosition) {

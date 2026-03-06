@@ -4,6 +4,44 @@ import yahooFinance2 from "yahoo-finance2";
 
 const yahooFinance = new yahooFinance2({ suppressNotices: ['yahooSurvey'] });
 
+function calculateSMA(data: number[], period: number): number | null {
+  if (data.length < period) return null;
+  const slice = data.slice(-period);
+  const sum = slice.reduce((a, b) => a + b, 0);
+  return sum / period;
+}
+
+function calculateRSI(data: number[], period: number = 14): number | null {
+  if (data.length <= period) return null;
+  
+  let gains = 0;
+  let losses = 0;
+  
+  for (let i = 1; i <= period; i++) {
+    const change = data[i] - data[i - 1];
+    if (change > 0) gains += change;
+    else losses -= change;
+  }
+  
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+  
+  for (let i = period + 1; i < data.length; i++) {
+    const change = data[i] - data[i - 1];
+    let gain = 0;
+    let loss = 0;
+    if (change > 0) gain = change;
+    else loss = -change;
+    
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
+  }
+  
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  return 100 - (100 / (1 + rs));
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -26,6 +64,30 @@ async function startServer() {
       for (const ticker of tickers) {
         try {
           const quote: any = await yahooFinance.quote(ticker);
+          
+          let sma20 = null;
+          let rsi14 = null;
+          
+          try {
+            const endDate = new Date();
+            const startDate = new Date();
+            startDate.setDate(endDate.getDate() - 60);
+            
+            const historical = await yahooFinance.historical(ticker, {
+              period1: startDate,
+              period2: endDate,
+              interval: '1d'
+            });
+            
+            if (historical && historical.length > 0) {
+              const closePrices = historical.map(h => h.close);
+              sma20 = calculateSMA(closePrices, 20);
+              rsi14 = calculateRSI(closePrices, 14);
+            }
+          } catch (histErr) {
+            console.error(`Error fetching historical data for ${ticker}:`, histErr);
+          }
+
           results.push({
             ticker,
             price: quote.regularMarketPrice,
@@ -33,6 +95,8 @@ async function startServer() {
             changePercent: quote.regularMarketChangePercent,
             volume: quote.regularMarketVolume,
             marketCap: quote.marketCap,
+            sma20,
+            rsi14
           });
         } catch (err) {
           console.error(`Error fetching quote for ${ticker}:`, err);
