@@ -1,0 +1,5 @@
+{
+  "name": "Portfolio Opening Bell Agent",
+  "description": "A position-aware AI portfolio assistant that analyzes your stock positions, market data, and news to provide actionable insights.",
+  "requestFramePermissions": []
+}
