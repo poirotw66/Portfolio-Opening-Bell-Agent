@@ -49,7 +49,7 @@ ${pos.ticker} 的相關新聞:
       prompt += "近期無相關新聞。\n";
     } else {
       tickerNews.forEach((n, idx) => {
-        prompt += `${idx + 1}. ${n.title} (來源: ${n.publisher})\n`;
+        prompt += `${idx + 1}. ${n.title} (來源: ${n.publisher}, 連結: ${n.link})\n`;
       });
     }
   }
@@ -59,10 +59,13 @@ ${pos.ticker} 的相關新聞:
 請根據上述數據產生一份「開盤投資組合摘要 (Portfolio Opening Bell Brief)」報告。
 請使用 Markdown 格式，包含清晰的標題與條列式重點。
 報告必須包含以下區塊：
-- 投資組合摘要 (Portfolio Summary)
-- 市場情境分析 (Market Context)
-- 關鍵新聞分析 (Key News Analysis)
-- AI 洞察 (包含部位洞察、風險因素、觀察重點)
+- 投資組合摘要 (Portfolio Summary) - 使用表格呈現持股現況。
+- 市場情境分析 (Market Context) - 說明大盤對投資組合的影響。
+- 關鍵新聞分析 (Key News Analysis) - 針對每則新聞標註其來源媒體。
+- AI 洞察 (包含部位洞察、風險因素、觀察重點)。
+- 參考資料 (Sources) - 列出所有參考新聞的標題與原始連結。
+
+請在報告結尾加上免責聲明：『本報告僅供參考，不構成投資建議。投資有風險，入市需謹慎。』
 `;
 
   const response = await ai.models.generateContent({
@@ -160,14 +163,23 @@ ${marketData.oneMonthPerformance ? `近一個月歷史績效: ${marketData.oneMo
           timeStr = ` (${diffDays}天前, ${publishDate.toISOString().split('T')[0].replace(/-/g, '')})`;
         }
       }
-      prompt += `${idx + 1}. ${n.title}${timeStr} (來源: ${n.publisher})\n`;
+      prompt += `${idx + 1}. ${n.title}${timeStr} (來源: ${n.publisher}, 連結: ${n.link})\n`;
     });
   }
 
   prompt += `
 ---
 請根據上述數據產生一份「${ticker} 開盤指南 (Opening Bell Guide)」。
-請使用 Markdown 格式，包含清晰的標題與條列式重點。
+請使用 Markdown 格式，包含豐富的 Emoji、清晰的標題與條列式重點。
+報告必須包含以下區塊：
+1. 🔔 開盤指南摘要 (Executive Summary)
+2. 📈 價格動能與技術面分析 (Technical Analysis)
+3. 📰 關鍵新聞與催化劑 (News & Catalysts) - 請務必標註新聞來源。
+4. 🌍 大盤環境影響 (Market Context)
+5. 🛠 今日交易策略 (Trading Strategy) - 結合持股部位提供具體的 Buy/Sell/Stop-loss 建議。
+6. 🔗 參考資料 (Sources) - 列出所有參考新聞的標題與原始連結。
+
+請在報告結尾加上免責聲明：『本報告僅供參考，不構成投資建議。投資有風險，入市需謹慎。』
 `;
 
   const response = await ai.models.generateContent({
