@@ -5,7 +5,8 @@ import { AnalysisPage } from "./pages/AnalysisPage";
 import { MarketPage } from "./pages/MarketPage";
 import { PortfolioSummaryPage } from "./pages/PortfolioSummaryPage";
 import { SavedReportsPage } from "./pages/SavedReportsPage";
-import { FileText } from "lucide-react";
+import { ProfilePage } from "./pages/ProfilePage";
+import { FileText, User } from "lucide-react";
 import { SettingsModal } from "./components/SettingsModal";
 
 export default function App() {
@@ -71,6 +72,17 @@ export default function App() {
                   <FileText className="w-4 h-4" />
                   歷史報告
                 </NavLink>
+                <NavLink 
+                  to="/profile" 
+                  className={({ isActive }) => 
+                    `px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors ${
+                      isActive ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`
+                  }
+                >
+                  <User className="w-4 h-4" />
+                  個人設定
+                </NavLink>
               </nav>
             </div>
             <div className="text-sm font-medium text-slate-500 flex items-center gap-4">
@@ -95,6 +107,7 @@ export default function App() {
             <Route path="/market" element={<MarketPage />} />
             <Route path="/summary" element={<PortfolioSummaryPage />} />
             <Route path="/saved-reports" element={<SavedReportsPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
           </Routes>
         </main>
         

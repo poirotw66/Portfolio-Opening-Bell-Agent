@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { AlertCircle, Newspaper, Briefcase, Search } from "lucide-react";
+import { AlertCircle, Newspaper, Briefcase, Search, CheckCircle2 } from "lucide-react";
 import PortfolioInput from "../components/PortfolioInput";
 import { SingleStockInput } from "../components/SingleStockInput";
 import ReportDisplay from "../components/ReportDisplay";
@@ -18,38 +18,9 @@ export function AnalysisPage() {
   const [singleStockReport, setSingleStockReport] = useState<string>("");
   const [isSingleStockLoading, setIsSingleStockLoading] = useState(false);
   const [singleStockError, setSingleStockError] = useState<string>("");
-  const [availableTickers, setAvailableTickers] = useState<string[]>(['NVDA', 'TSLA']);
+  const [availableTickers, setAvailableTickers] = useState<string[]>([]);
 
   const [savedPositions, setSavedPositions] = useState<Position[]>([]);
-
-  const handleSaveReport = (reportContent?: string, reportType?: 'portfolio' | 'single-stock', reportTickers?: string[]) => {
-    const currentReport = reportContent || (activeTab === 'portfolio' ? report : singleStockReport);
-    if (!currentReport) return;
-
-    const type = reportType || (activeTab === 'portfolio' ? 'portfolio' : 'single-stock');
-    const tickers = reportTickers || (activeTab === 'portfolio' 
-      ? savedPositions.map(p => p.ticker)
-      : availableTickers);
-
-    let title = '投資組合分析報告';
-    if (type === 'single-stock' && tickers.length > 0) {
-      title = `${tickers[0]} 開盤指南`;
-    }
-
-    const newReport: SavedReport = {
-      id: Date.now().toString(),
-      title,
-      content: currentReport,
-      date: new Date().toISOString(),
-      type,
-      tickers
-    };
-    
-    const saved = localStorage.getItem('savedReports');
-    const reports: SavedReport[] = saved ? JSON.parse(saved) : [];
-    reports.unshift(newReport);
-    localStorage.setItem('savedReports', JSON.stringify(reports));
-  };
 
   useEffect(() => {
     const saved = localStorage.getItem('portfolio');
@@ -58,16 +29,49 @@ export function AnalysisPage() {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           setSavedPositions(parsed);
+          setAvailableTickers(Array.from(new Set(parsed.map((p: any) => p.ticker))));
         }
       } catch (e) {}
     }
   }, []);
 
-  const handleSavePortfolio = async (positions: Position[]) => {
-    setSavedPositions(positions);
+  const handleSaveReport = (reportContent: string, reportType: 'portfolio' | 'single-stock', reportTickers: string[]) => {
+    let title = '投資組合分析報告';
+    if (reportType === 'single-stock' && reportTickers.length > 0) {
+      title = `${reportTickers[0]} 開盤指南`;
+    }
+
+    const newReport: SavedReport = {
+      id: Date.now().toString(),
+      title,
+      content: reportContent,
+      date: new Date().toISOString(),
+      type: reportType,
+      tickers: reportTickers
+    };
+    
+    const saved = localStorage.getItem('savedReports');
+    const reports: SavedReport[] = saved ? JSON.parse(saved) : [];
+    reports.unshift(newReport);
+    localStorage.setItem('savedReports', JSON.stringify(reports));
   };
 
-  const handleAnalyze = async (positions: Position[]) => {
+  const handleAnalyze = async () => {
+    const saved = localStorage.getItem('portfolio');
+    let currentPositions = savedPositions;
+    
+    if (saved) {
+      try {
+        currentPositions = JSON.parse(saved);
+        setSavedPositions(currentPositions);
+      } catch (e) {}
+    }
+
+    if (currentPositions.length === 0) {
+      setError("請先在「個人設定」中設定您的投資組合部位。");
+      return;
+    }
+    
     setIsLoading(true);
     setError("");
     setReport("");
@@ -75,7 +79,8 @@ export function AnalysisPage() {
     setActiveTab('portfolio');
 
     try {
-      const tickers = positions.map((p) => p.ticker);
+      const tickers = currentPositions.map((p) => p.ticker);
+      const strategy = localStorage.getItem('investmentStrategy') || 'growth';
 
       // Fetch all data in parallel
       const [marketData, news, marketContext] = await Promise.all([
@@ -87,9 +92,9 @@ export function AnalysisPage() {
       setNewsData(news);
 
       // Calculate analytics
-      const analytics: PositionAnalytics[] = positions.map((pos) => {
+      const analytics: PositionAnalytics[] = currentPositions.map((pos) => {
         const data = marketData.find((m) => m.ticker === pos.ticker);
-        const currentPrice = data?.price || pos.avgPrice; // Fallback to avg if error
+        const currentPrice = data?.price || pos.avgPrice;
         const positionValue = pos.shares * currentPrice;
         const costBasis = pos.shares * pos.avgPrice;
         const unrealizedPL = positionValue - costBasis;
@@ -106,7 +111,7 @@ export function AnalysisPage() {
       });
 
       // Generate AI Report
-      const aiReport = await generateOpeningBellBrief(analytics, marketContext, news);
+      const aiReport = await generateOpeningBellBrief(analytics, marketContext, news, strategy as any);
       setReport(aiReport);
       handleSaveReport(aiReport, 'portfolio', tickers);
     } catch (err: any) {
@@ -139,8 +144,20 @@ export function AnalysisPage() {
       }
 
       const tickerNews = news[ticker] || [];
-      const position = savedPositions.find(p => p.ticker === ticker);
-      const aiReport = await generateSingleStockBrief(ticker, data, tickerNews, marketContext, position);
+      
+      // Get latest positions for context
+      const saved = localStorage.getItem('portfolio');
+      let currentPositions = savedPositions;
+      if (saved) {
+        try {
+          currentPositions = JSON.parse(saved);
+          setSavedPositions(currentPositions);
+        } catch (e) {}
+      }
+      
+      const position = currentPositions.find(p => p.ticker === ticker);
+      const strategy = localStorage.getItem('investmentStrategy') || 'growth';
+      const aiReport = await generateSingleStockBrief(ticker, data, tickerNews, marketContext, position, strategy as any);
       setSingleStockReport(aiReport);
       handleSaveReport(aiReport, 'single-stock', [ticker]);
     } catch (err: any) {
@@ -158,7 +175,64 @@ export function AnalysisPage() {
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
       {/* Left Column: Input */}
       <div className="lg:col-span-4 space-y-6">
-        <PortfolioInput onSubmit={handleAnalyze} onSave={handleSavePortfolio} isLoading={isLoading} onTickersChange={setAvailableTickers} />
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Briefcase className="w-5 h-5 text-indigo-600" />
+            <h2 className="text-lg font-semibold text-slate-900">投資組合分析</h2>
+          </div>
+          
+          {savedPositions.length > 0 ? (
+            <div className="space-y-4">
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">目前追蹤部位</div>
+                <div className="flex flex-wrap gap-2">
+                  {savedPositions.map(p => (
+                    <span key={p.ticker} className="px-2 py-1 bg-white border border-slate-200 rounded text-xs font-mono font-bold text-slate-700">
+                      {p.ticker}
+                    </span>
+                  ))}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-3 italic">
+                  * 如需修改部位，請至「個人設定」頁面
+                </div>
+              </div>
+              
+              <button
+                onClick={handleAnalyze}
+                disabled={isLoading}
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-3 px-4 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    分析中...
+                  </>
+                ) : (
+                  <>
+                    <Newspaper className="w-4 h-4" />
+                    產生投資組合開盤報告
+                  </>
+                )}
+              </button>
+            </div>
+          ) : (
+            <div className="text-center py-6">
+              <p className="text-sm text-slate-500 mb-4">您尚未設定投資組合部位</p>
+              <a 
+                href="/profile" 
+                className="inline-flex items-center gap-2 text-sm font-bold text-indigo-600 hover:text-indigo-700"
+                onClick={(e) => {
+                  e.preventDefault();
+                  window.location.href = '/profile';
+                }}
+              >
+                前往設定部位
+                <CheckCircle2 className="w-4 h-4" />
+              </a>
+            </div>
+          )}
+        </div>
+
         <SingleStockInput onSubmit={handleSingleStockAnalyze} isLoading={isSingleStockLoading} availableTickers={availableTickers} />
         
         <div className="bg-indigo-50 rounded-2xl p-6 border border-indigo-100">

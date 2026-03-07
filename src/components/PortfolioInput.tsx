@@ -3,13 +3,12 @@ import { Position } from "../types";
 import { Plus, Trash2, Upload, Code, List, Save } from "lucide-react";
 
 interface Props {
-  onSubmit: (positions: Position[]) => void;
   onSave: (positions: Position[]) => void;
   isLoading: boolean;
   onTickersChange?: (tickers: string[]) => void;
 }
 
-export default function PortfolioInput({ onSubmit, onSave, isLoading, onTickersChange }: Props) {
+export default function PortfolioInput({ onSave, isLoading, onTickersChange }: Props) {
   const [inputMode, setInputMode] = useState<'ui' | 'json'>('ui');
   
   // UI Mode State
@@ -23,6 +22,7 @@ export default function PortfolioInput({ onSubmit, onSave, isLoading, onTickersC
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [error, setError] = useState("");
+  const [isSaved, setIsSaved] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('portfolio');
@@ -148,24 +148,16 @@ export default function PortfolioInput({ onSubmit, onSave, isLoading, onTickersC
     return parsedPositions;
   };
 
-  const handleSave = () => {
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
     setError("");
+    setIsSaved(false);
     try {
       const parsedPositions = getParsedPositions();
       localStorage.setItem('portfolio', JSON.stringify(parsedPositions));
       onSave(parsedPositions);
-    } catch (err: any) {
-      setError(err.message || "解析輸入失敗");
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-
-    try {
-      const parsedPositions = getParsedPositions();
-      onSubmit(parsedPositions);
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
     } catch (err: any) {
       setError(err.message || "解析輸入失敗");
     }
@@ -199,7 +191,7 @@ export default function PortfolioInput({ onSubmit, onSave, isLoading, onTickersC
         </div>
       </div>
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSave}>
         {inputMode === 'ui' ? (
           <div className="space-y-3 mb-6">
             <div className="grid grid-cols-12 gap-2 text-xs font-medium text-slate-500 px-1">
@@ -308,31 +300,27 @@ export default function PortfolioInput({ onSubmit, onSave, isLoading, onTickersC
           </div>
         )}
 
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={isLoading}
-            className="flex-1 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium py-3 px-4 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            <Save className="w-4 h-4" />
-            儲存並查看行情
-          </button>
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="flex-[2] bg-slate-900 hover:bg-slate-800 text-white font-medium py-3 px-4 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isLoading ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                分析投資組合中...
-              </>
-            ) : (
-              "產生開盤分析報告"
-            )}
-          </button>
-        </div>
+        <button
+          type="submit"
+          disabled={isLoading}
+          className={`w-full font-medium py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 ${
+            isSaved 
+              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-200' 
+              : 'bg-slate-900 hover:bg-slate-800 text-white'
+          }`}
+        >
+          {isSaved ? (
+            <>
+              <Save className="w-4 h-4" />
+              已儲存投資組合
+            </>
+          ) : (
+            <>
+              <Save className="w-4 h-4" />
+              儲存投資組合
+            </>
+          )}
+        </button>
       </form>
     </div>
   );

@@ -1,10 +1,20 @@
 import { GoogleGenAI } from "@google/genai";
-import { PositionAnalytics, MarketContext, NewsItem } from "../types";
+import { PositionAnalytics, MarketContext, NewsItem, InvestmentStrategy } from "../types";
+
+const STRATEGY_LABELS: Record<InvestmentStrategy, string> = {
+  value: '價值投資 (尋找被低估的股票)',
+  growth: '成長投資 (專注高增長潛力)',
+  index: '指數投資 (追求市場平均報酬)',
+  dividend: '股息投資 (偏好穩定配息)',
+  technical: '技術交易 (利用圖表與指標)',
+  dca: '定期定額 (固定投入分散成本)',
+};
 
 export async function generateOpeningBellBrief(
   positions: PositionAnalytics[],
   marketContext: MarketContext,
-  news: Record<string, NewsItem[]>
+  news: Record<string, NewsItem[]>,
+  strategy: InvestmentStrategy = 'growth'
 ): Promise<string> {
   const manualKey = localStorage.getItem('customGeminiApiKey');
   const apiKey = manualKey || process.env.API_KEY || process.env.GEMINI_API_KEY;
@@ -17,6 +27,7 @@ export async function generateOpeningBellBrief(
 
   let prompt = `你是一個專業的金融分析助理。
 你的任務是根據使用者的持股資料、市場數據與新聞，分析使用者的投資組合部位。
+使用者的投資策略是：${STRATEGY_LABELS[strategy] || strategy}。請務必根據此策略提供對應的建議。
 請專注於以下幾點：
 1. 部位風險 (Position risk)
 2. 市場情境 (Market context)
@@ -84,7 +95,8 @@ export async function generateSingleStockBrief(
   marketData: any,
   news: any[],
   marketContext: any,
-  userPosition?: { shares: number; avgPrice: number }
+  userPosition?: { shares: number; avgPrice: number },
+  strategy: InvestmentStrategy = 'growth'
 ): Promise<string> {
   const manualKey = localStorage.getItem('customGeminiApiKey');
   const apiKey = manualKey || process.env.API_KEY || process.env.GEMINI_API_KEY;
@@ -97,6 +109,7 @@ export async function generateSingleStockBrief(
 
   let prompt = `你是一個專業的金融分析助理。
 你的任務是針對單一股票「${ticker}」提供當天的開盤指南。
+使用者的投資策略是：${STRATEGY_LABELS[strategy] || strategy}。請務必根據此策略提供對應的建議。
 請專注於以下幾點：
 1. 價格動能與技術面暗示 (Price momentum & technical hints) - **請分析目前股價與均線(SMA)的關係，以及RSI指標是否顯示超買或超賣。**
 2. 歷史績效趨勢 (Historical performance trends) - **請分析該股票過去一個月的歷史績效表現，並說明這對短期走勢的潛在影響。**

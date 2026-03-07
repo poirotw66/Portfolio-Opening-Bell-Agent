@@ -24,6 +24,13 @@ export interface NewsItem {
   providerPublishTime: string | number | Date;
 }
 
+export type InvestmentStrategy = 'value' | 'growth' | 'index' | 'dividend' | 'technical' | 'dca';
+
+export interface UserProfile {
+  portfolio: Position[];
+  strategy: InvestmentStrategy;
+}
+
 export interface SavedReport {
   id: string;
   title: string;
