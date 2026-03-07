@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { AlertCircle, Newspaper, Briefcase, Search } from "lucide-react";
+import { AlertCircle, Newspaper, Briefcase, Search, Save, Check } from "lucide-react";
 import PortfolioInput from "../components/PortfolioInput";
 import { SingleStockInput } from "../components/SingleStockInput";
 import ReportDisplay from "../components/ReportDisplay";
-import { Position, PositionAnalytics, NewsItem } from "../types";
+import { Position, PositionAnalytics, NewsItem, SavedReport } from "../types";
 import { fetchMarketData, fetchNews, fetchMarketContext } from "../services/marketService";
 import { generateOpeningBellBrief, generateSingleStockBrief } from "../services/geminiService";
 
@@ -21,6 +21,43 @@ export function AnalysisPage() {
   const [availableTickers, setAvailableTickers] = useState<string[]>(['NVDA', 'TSLA']);
 
   const [savedPositions, setSavedPositions] = useState<Position[]>([]);
+  const [isSaved, setIsSaved] = useState(false);
+
+  // Reset save state when report changes
+  useEffect(() => {
+    setIsSaved(false);
+  }, [report, singleStockReport, activeTab]);
+
+  const handleSaveReport = (reportContent?: string, reportType?: 'portfolio' | 'single-stock', reportTickers?: string[]) => {
+    const currentReport = reportContent || (activeTab === 'portfolio' ? report : singleStockReport);
+    if (!currentReport) return;
+
+    const type = reportType || (activeTab === 'portfolio' ? 'portfolio' : 'single-stock');
+    const tickers = reportTickers || (activeTab === 'portfolio' 
+      ? savedPositions.map(p => p.ticker)
+      : availableTickers);
+
+    let title = '投資組合分析報告';
+    if (type === 'single-stock' && tickers.length > 0) {
+      title = `${tickers[0]} 開盤指南`;
+    }
+
+    const newReport: SavedReport = {
+      id: Date.now().toString(),
+      title,
+      content: currentReport,
+      date: new Date().toISOString(),
+      type,
+      tickers
+    };
+    
+    const saved = localStorage.getItem('savedReports');
+    const reports: SavedReport[] = saved ? JSON.parse(saved) : [];
+    reports.unshift(newReport);
+    localStorage.setItem('savedReports', JSON.stringify(reports));
+    setIsSaved(true);
+    setTimeout(() => setIsSaved(false), 3000);
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem('portfolio');
@@ -79,8 +116,13 @@ export function AnalysisPage() {
       // Generate AI Report
       const aiReport = await generateOpeningBellBrief(analytics, marketContext, news);
       setReport(aiReport);
+      handleSaveReport(aiReport, 'portfolio', tickers);
     } catch (err: any) {
-      setError(err.message || "分析過程中發生錯誤。");
+      let errorMessage = err.message || "分析過程中發生錯誤。";
+      if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || errorMessage.includes("quota")) {
+        errorMessage = "API 請求次數已達上限 (Quota Exceeded)。請稍後再試，或在「系統設定」中更換您的自訂 Gemini API Key。";
+      }
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -108,8 +150,13 @@ export function AnalysisPage() {
       const position = savedPositions.find(p => p.ticker === ticker);
       const aiReport = await generateSingleStockBrief(ticker, data, tickerNews, marketContext, position);
       setSingleStockReport(aiReport);
+      handleSaveReport(aiReport, 'single-stock', [ticker]);
     } catch (err: any) {
-      setSingleStockError(err.message || "分析過程中發生錯誤。");
+      let errorMessage = err.message || "分析過程中發生錯誤。";
+      if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || errorMessage.includes("quota")) {
+        errorMessage = "API 請求次數已達上限 (Quota Exceeded)。請稍後再試，或在「系統設定」中更換您的自訂 Gemini API Key。";
+      }
+      setSingleStockError(errorMessage);
     } finally {
       setIsSingleStockLoading(false);
     }
@@ -195,7 +242,20 @@ export function AnalysisPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}
+                className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 relative"
               >
+                <button
+                  onClick={handleSaveReport}
+                  disabled={isSaved}
+                  className={`absolute top-6 right-6 flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    isSaved 
+                      ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' 
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:text-indigo-600'
+                  }`}
+                >
+                  {isSaved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                  {isSaved ? '已儲存' : '儲存報告'}
+                </button>
                 <ReportDisplay report={report} />
               </motion.div>
             )}
@@ -237,7 +297,20 @@ export function AnalysisPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}
+                className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 relative"
               >
+                <button
+                  onClick={handleSaveReport}
+                  disabled={isSaved}
+                  className={`absolute top-6 right-6 flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    isSaved 
+                      ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' 
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:text-indigo-600'
+                  }`}
+                >
+                  {isSaved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+                  {isSaved ? '已儲存' : '儲存報告'}
+                </button>
                 <ReportDisplay report={singleStockReport} />
               </motion.div>
             )}

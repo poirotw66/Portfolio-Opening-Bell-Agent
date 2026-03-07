@@ -24,6 +24,15 @@ export interface NewsItem {
   providerPublishTime: number;
 }
 
+export interface SavedReport {
+  id: string;
+  title: string;
+  content: string;
+  date: string;
+  type: 'portfolio' | 'single-stock';
+  tickers: string[];
+}
+
 export interface PositionAnalytics {
   ticker: string;
   shares: number;

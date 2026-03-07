@@ -6,12 +6,14 @@ export async function generateOpeningBellBrief(
   marketContext: MarketContext,
   news: Record<string, NewsItem[]>
 ): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const manualKey = localStorage.getItem('customGeminiApiKey');
+  const apiKey = manualKey || process.env.API_KEY || process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error("缺少 GEMINI_API_KEY。請在環境變數中設定。");
   }
 
   const ai = new GoogleGenAI({ apiKey });
+  const model = localStorage.getItem('geminiModel') || 'gemini-3-flash-preview';
 
   let prompt = `你是一個專業的金融分析助理。
 你的任務是根據使用者的持股資料、市場數據與新聞，分析使用者的投資組合部位。
@@ -64,7 +66,7 @@ ${pos.ticker} 的相關新聞:
 `;
 
   const response = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
+    model: model,
     contents: prompt,
     config: {
       tools: [{ googleSearch: {} }],
@@ -81,12 +83,14 @@ export async function generateSingleStockBrief(
   marketContext: any,
   userPosition?: { shares: number; avgPrice: number }
 ): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const manualKey = localStorage.getItem('customGeminiApiKey');
+  const apiKey = manualKey || process.env.API_KEY || process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error("缺少 GEMINI_API_KEY。請在環境變數中設定。");
   }
 
   const ai = new GoogleGenAI({ apiKey });
+  const model = localStorage.getItem('geminiModel') || 'gemini-3-flash-preview';
 
   let prompt = `你是一個專業的金融分析助理。
 你的任務是針對單一股票「${ticker}」提供當天的開盤指南。
@@ -151,7 +155,7 @@ ${marketData.oneMonthPerformance ? `近一個月歷史績效: ${marketData.oneMo
 `;
 
   const response = await ai.models.generateContent({
-    model: "gemini-3.1-pro-preview",
+    model: model,
     contents: prompt,
     config: {
       tools: [{ googleSearch: {} }],

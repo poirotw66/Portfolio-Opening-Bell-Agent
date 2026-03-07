@@ -1,10 +1,16 @@
-import React from "react";
+import React, { useState } from "react";
 import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
-import { Activity, TrendingUp, BarChart3, LineChart } from "lucide-react";
+import { Activity, TrendingUp, BarChart3, LineChart, PieChart, Settings } from "lucide-react";
 import { AnalysisPage } from "./pages/AnalysisPage";
 import { MarketPage } from "./pages/MarketPage";
+import { PortfolioSummaryPage } from "./pages/PortfolioSummaryPage";
+import { SavedReportsPage } from "./pages/SavedReportsPage";
+import { FileText } from "lucide-react";
+import { SettingsModal } from "./components/SettingsModal";
 
 export default function App() {
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900">
@@ -43,11 +49,42 @@ export default function App() {
                   <LineChart className="w-4 h-4" />
                   即時行情庫存
                 </NavLink>
+                <NavLink 
+                  to="/summary" 
+                  className={({ isActive }) => 
+                    `px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors ${
+                      isActive ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`
+                  }
+                >
+                  <PieChart className="w-4 h-4" />
+                  帳務總覽
+                </NavLink>
+                <NavLink 
+                  to="/saved-reports" 
+                  className={({ isActive }) => 
+                    `px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2 transition-colors ${
+                      isActive ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`
+                  }
+                >
+                  <FileText className="w-4 h-4" />
+                  歷史報告
+                </NavLink>
               </nav>
             </div>
-            <div className="text-sm font-medium text-slate-500 flex items-center gap-1">
-              <TrendingUp className="w-4 h-4" />
-              部位感知 AI
+            <div className="text-sm font-medium text-slate-500 flex items-center gap-4">
+              <div className="flex items-center gap-1">
+                <TrendingUp className="w-4 h-4" />
+                部位感知 AI
+              </div>
+              <button 
+                onClick={() => setIsSettingsOpen(true)}
+                className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                title="系統設定"
+              >
+                <Settings className="w-5 h-5" />
+              </button>
             </div>
           </div>
         </header>
@@ -56,8 +93,15 @@ export default function App() {
           <Routes>
             <Route path="/" element={<AnalysisPage />} />
             <Route path="/market" element={<MarketPage />} />
+            <Route path="/summary" element={<PortfolioSummaryPage />} />
+            <Route path="/saved-reports" element={<SavedReportsPage />} />
           </Routes>
         </main>
+        
+        <SettingsModal 
+          isOpen={isSettingsOpen} 
+          onClose={() => setIsSettingsOpen(false)} 
+        />
       </div>
     </BrowserRouter>
   );

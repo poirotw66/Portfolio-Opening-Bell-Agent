@@ -37,6 +37,15 @@ export function MarketGrid({ data, positions, isLoading }: Props) {
           const bgColorClass = isUp ? 'bg-red-50' : 'bg-emerald-50';
           const accentColorClass = isUp ? 'bg-red-500' : 'bg-emerald-500';
 
+          let positionColorClass = "bg-slate-100 text-slate-500 border-slate-200";
+          if (position && item.price) {
+            if (item.price > position.avgPrice) {
+              positionColorClass = "bg-red-50 text-red-600 border-red-200";
+            } else if (item.price < position.avgPrice) {
+              positionColorClass = "bg-emerald-50 text-emerald-600 border-emerald-200";
+            }
+          }
+
           return (
             <div 
               key={item.ticker} 
@@ -50,11 +59,11 @@ export function MarketGrid({ data, positions, isLoading }: Props) {
                   <div>
                     <h3 className="text-xl font-bold text-slate-900 tracking-tight">{item.ticker}</h3>
                     {position && (
-                      <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs font-medium text-slate-500">
-                        <span className="bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                      <div className="flex flex-wrap items-center gap-2 mt-1.5 text-xs font-medium">
+                        <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md border border-slate-200">
                           {position.shares} 股
                         </span>
-                        <span className="bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+                        <span className={`px-2 py-0.5 rounded-md border ${positionColorClass}`}>
                           均價 ${position.avgPrice.toFixed(2)}
                         </span>
                       </div>
