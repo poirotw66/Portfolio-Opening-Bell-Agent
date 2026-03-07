@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { AlertCircle, Newspaper, Briefcase, Search, Save, Check } from "lucide-react";
+import { AlertCircle, Newspaper, Briefcase, Search } from "lucide-react";
 import PortfolioInput from "../components/PortfolioInput";
 import { SingleStockInput } from "../components/SingleStockInput";
 import ReportDisplay from "../components/ReportDisplay";
@@ -21,12 +21,6 @@ export function AnalysisPage() {
   const [availableTickers, setAvailableTickers] = useState<string[]>(['NVDA', 'TSLA']);
 
   const [savedPositions, setSavedPositions] = useState<Position[]>([]);
-  const [isSaved, setIsSaved] = useState(false);
-
-  // Reset save state when report changes
-  useEffect(() => {
-    setIsSaved(false);
-  }, [report, singleStockReport, activeTab]);
 
   const handleSaveReport = (reportContent?: string, reportType?: 'portfolio' | 'single-stock', reportTickers?: string[]) => {
     const currentReport = reportContent || (activeTab === 'portfolio' ? report : singleStockReport);
@@ -55,8 +49,6 @@ export function AnalysisPage() {
     const reports: SavedReport[] = saved ? JSON.parse(saved) : [];
     reports.unshift(newReport);
     localStorage.setItem('savedReports', JSON.stringify(reports));
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
   };
 
   useEffect(() => {
@@ -244,18 +236,6 @@ export function AnalysisPage() {
                 transition={{ duration: 0.4 }}
                 className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 relative"
               >
-                <button
-                  onClick={handleSaveReport}
-                  disabled={isSaved}
-                  className={`absolute top-6 right-6 flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    isSaved 
-                      ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' 
-                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:text-indigo-600'
-                  }`}
-                >
-                  {isSaved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-                  {isSaved ? '已儲存' : '儲存報告'}
-                </button>
                 <ReportDisplay report={report} />
               </motion.div>
             )}
@@ -299,18 +279,6 @@ export function AnalysisPage() {
                 transition={{ duration: 0.4 }}
                 className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 relative"
               >
-                <button
-                  onClick={handleSaveReport}
-                  disabled={isSaved}
-                  className={`absolute top-6 right-6 flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    isSaved 
-                      ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' 
-                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 hover:text-indigo-600'
-                  }`}
-                >
-                  {isSaved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-                  {isSaved ? '已儲存' : '儲存報告'}
-                </button>
                 <ReportDisplay report={singleStockReport} />
               </motion.div>
             )}

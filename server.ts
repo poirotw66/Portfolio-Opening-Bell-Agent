@@ -2,7 +2,7 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import yahooFinance2 from "yahoo-finance2";
 
-const yahooFinance = new yahooFinance2({ suppressNotices: ['yahooSurvey'] });
+const yahooFinance = new (yahooFinance2 as any)({ suppressNotices: ['yahooSurvey', 'ripHistorical'] });
 
 function calculateSMA(data: number[], period: number): number | null {
   if (data.length < period) return null;

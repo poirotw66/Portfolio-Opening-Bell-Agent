@@ -21,13 +21,11 @@ export function SavedReportsPage() {
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm("確定要刪除這份報告嗎？")) {
-      const updated = reports.filter(r => r.id !== id);
-      setReports(updated);
-      localStorage.setItem('savedReports', JSON.stringify(updated));
-      if (selectedReport?.id === id) {
-        setSelectedReport(null);
-      }
+    const updated = reports.filter(r => r.id !== id);
+    setReports(updated);
+    localStorage.setItem('savedReports', JSON.stringify(updated));
+    if (selectedReport?.id === id) {
+      setSelectedReport(null);
     }
   };
 

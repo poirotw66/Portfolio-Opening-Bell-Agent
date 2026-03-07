@@ -21,7 +21,7 @@ export interface NewsItem {
   title: string;
   publisher: string;
   link: string;
-  providerPublishTime: number;
+  providerPublishTime: string | number | Date;
 }
 
 export interface SavedReport {

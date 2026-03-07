@@ -144,7 +144,23 @@ ${marketData.oneMonthPerformance ? `近一個月歷史績效: ${marketData.oneMo
     prompt += "近期無相關新聞。\n";
   } else {
     news.forEach((n, idx) => {
-      prompt += `${idx + 1}. ${n.title} (來源: ${n.publisher})\n`;
+      let timeStr = "";
+      if (n.providerPublishTime) {
+        const publishDate = new Date(n.providerPublishTime);
+        const now = new Date();
+        const diffMs = now.getTime() - publishDate.getTime();
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+        const diffDays = Math.floor(diffHours / 24);
+        
+        if (diffHours < 1) {
+          timeStr = " (剛剛)";
+        } else if (diffHours < 24) {
+          timeStr = ` (${diffHours}小時前)`;
+        } else {
+          timeStr = ` (${diffDays}天前, ${publishDate.toISOString().split('T')[0].replace(/-/g, '')})`;
+        }
+      }
+      prompt += `${idx + 1}. ${n.title}${timeStr} (來源: ${n.publisher})\n`;
     });
   }
 
