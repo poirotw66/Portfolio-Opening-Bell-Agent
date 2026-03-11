@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Key, Cpu } from 'lucide-react';
+import { X, Key, Cpu, Search } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -25,6 +25,7 @@ export function SettingsModal({ isOpen, onClose }: Props) {
   const [selectedModel, setSelectedModel] = useState('gemini-3-flash-preview');
   const [hasKey, setHasKey] = useState(false);
   const [manualApiKey, setManualApiKey] = useState('');
+  const [serpApiKey, setSerpApiKey] = useState('');
 
   useEffect(() => {
     const savedModel = localStorage.getItem('geminiModel');
@@ -36,6 +37,11 @@ export function SettingsModal({ isOpen, onClose }: Props) {
     if (savedApiKey) {
       setManualApiKey(savedApiKey);
       setHasKey(true);
+    }
+
+    const savedSerpApiKey = localStorage.getItem('serpApiKey');
+    if (savedSerpApiKey) {
+      setSerpApiKey(savedSerpApiKey);
     }
 
     const checkKey = async () => {
@@ -74,6 +80,16 @@ export function SettingsModal({ isOpen, onClose }: Props) {
       } else {
         setHasKey(false);
       }
+    }
+  };
+
+  const handleSerpApiKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newKey = e.target.value;
+    setSerpApiKey(newKey);
+    if (newKey.trim() !== '') {
+      localStorage.setItem('serpApiKey', newKey);
+    } else {
+      localStorage.removeItem('serpApiKey');
     }
   };
 
@@ -168,6 +184,28 @@ export function SettingsModal({ isOpen, onClose }: Props) {
             
             <p className="text-xs text-slate-500">
               您可以透過上方按鈕選擇 Google Cloud 專案，或直接在下方貼上您的 Gemini API Key。手動輸入的 Key 會優先使用。
+            </p>
+          </div>
+
+          {/* SerpAPI Key Selection */}
+          <div className="space-y-3 pt-4 border-t border-slate-100">
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+              <Search className="w-4 h-4 text-indigo-600" />
+              SerpAPI Key (新聞搜尋)
+            </label>
+            
+            <div className="pt-2">
+              <input
+                type="password"
+                value={serpApiKey}
+                onChange={handleSerpApiKeyChange}
+                placeholder="輸入 SerpAPI Key..."
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono"
+              />
+            </div>
+            
+            <p className="text-xs text-slate-500">
+              設定 SerpAPI Key 以啟用更精準的新聞搜尋功能。若未設定，將使用系統預設的 Yahoo Finance 搜尋。
             </p>
           </div>
         </div>

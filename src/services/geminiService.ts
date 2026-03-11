@@ -1,5 +1,5 @@
-import { GoogleGenAI } from "@google/genai";
-import { PositionAnalytics, MarketContext, NewsItem, InvestmentStrategy } from "../types";
+import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold } from "@google/genai";
+import { PositionAnalytics, MarketContext, NewsItem, InvestmentStrategy, DecisionDashboard } from "../types";
 
 const STRATEGY_LABELS: Record<InvestmentStrategy, string> = {
   value: '價值投資 (尋找被低估的股票)',
@@ -9,6 +9,283 @@ const STRATEGY_LABELS: Record<InvestmentStrategy, string> = {
   technical: '技術交易 (利用圖表與指標)',
   dca: '定期定額 (固定投入分散成本)',
 };
+
+export async function generateSingleStockDashboard(
+  ticker: string,
+  marketData: any,
+  news: any[],
+  marketContext: any,
+  userPosition?: { shares: number; avgPrice: number },
+  strategy: InvestmentStrategy = 'growth'
+): Promise<DecisionDashboard> {
+  const manualKey = localStorage.getItem('customGeminiApiKey');
+  const apiKey = manualKey || process.env.API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("缺少 GEMINI_API_KEY。請在環境變數中設定。");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  const model = localStorage.getItem('geminiModel') || 'gemini-3-flash-preview';
+
+  const systemInstruction = `你是一位專注於趨勢交易的投資分析 Agent，擁有數據工具和交易策略，負責生成專業的【決策儀表盤】分析報告。
+
+## 語言要求
+- **必須使用繁體中文 (Traditional Chinese)** 輸出所有文字內容。
+
+## Markdown 格式要求 (針對 full_report_markdown 欄位)
+- **標題**：使用 \`##\` 作為各區塊的標題（例如：\`## 🔔 開盤指南摘要\`）。
+- **換行**：每個區塊標題前必須有兩個換行符 (\`\\n\\n\`)，確保標題位於行首且與上方內容有間隔。
+- **條列**：使用標準的 Markdown 列表格式（\`- \` 或 \`1. \`）。
+- **強調**：適當使用粗體 (\`**\`) 強調關鍵數據。
+
+## 核心交易理念（必須嚴格遵守）
+
+### 1. 嚴進策略（不追高）
+- **絕對不追高**：當股價偏離 MA5 超過 5% 時，堅決不買入
+- 乖離率 < 2%：最佳買點區間
+- 乖離率 2-5%：可小倉介入
+- 乖離率 > 5%：嚴禁追高！直接判定為"觀望"
+
+### 2. 趨勢交易（順勢而為）
+- **多頭排列必須條件**：MA5 > MA10 > MA20
+- 只做多頭排列的股票，空頭排列堅決不碰
+- 均線發散上行優於均線粘合
+
+### 3. 效率優先（籌碼結構）
+- 關注籌碼集中度：90%集中度 < 15% 表示籌碼集中
+- 獲利比例分析：70-90% 獲利盤時需警惕獲利回吐
+- 平均成本與現價關係：現價高於平均成本 5-15% 為健康
+
+### 4. 買點偏好（回踩支撐）
+- **最佳買點**：縮量回踩 MA5 獲得支撐
+- **次優買點**：回踩 MA10 獲得支撐
+- **觀望情況**：跌破 MA20 時觀望
+
+### 5. 風險排查重點
+- 減持公告、業績預虧、監管處罰、行業政策利空、大額解禁
+
+### 6. 估值關注（PE/PB）
+- PE 明顯偏高時需在風險點中說明
+
+### 7. 强势趨勢股放寬
+- 强势趨勢股可適當放寬乖離率要求，輕倉追蹤但需設止損
+
+## 規則
+1. 必須基於真實數據進行分析。
+2. 應用交易策略評估。
+3. 輸出格式必須為有效的決策儀表盤 JSON。
+4. 風險優先排查。
+5. **極度重要：所有 JSON 字串欄位必須只包含「一句話」，字數嚴格限制在 30 字以內，絕對不可重複生成多個結論。**
+7. **嚴禁重複：任何欄位的值絕對不能出現無意義的重複字詞（例如：不斷重複「子層面優異性高」）。如果發現重複，請立即停止該句子的生成。**
+8. **full_report_markdown 的長度請控制在 500 字以內，只講重點。**
+`;
+
+  let prompt = `請針對股票「${ticker}」生成決策儀表盤 JSON。
+使用者的投資策略是：${STRATEGY_LABELS[strategy] || strategy}。
+
+請務必在「full_report_markdown」欄位中生成一份完整的開盤指南報告。
+**格式要求：**
+- 每個章節必須以 \`##\` 開頭並換行。
+- 確保標題符號 \`#\` 前面有換行符，不要接在上一段文字後面。
+
+包含以下區塊：
+1. ## 🔔 開盤指南摘要 (Executive Summary)
+2. ## 📈 價格動能與技術面分析 (Technical Analysis)
+3. ## 📰 關鍵新聞與催化劑 (News & Catalysts)
+4. ## 🌍 大盤環境影響 (Market Context)
+5. ## 🛠 今日交易策略 (Trading Strategy)
+6. ## 🔗 參考資料 (Sources)
+
+以下是相關數據：
+
+--- 市場情境 ---
+NASDAQ (^IXIC): ${marketContext["^IXIC"]?.changePercent?.toFixed(2)}%
+S&P 500 (^GSPC): ${marketContext["^GSPC"]?.changePercent?.toFixed(2)}%
+
+--- 股票數據 (${ticker}) ---
+目前股價: $${marketData.price?.toFixed(2)}
+漲跌幅: ${marketData.changePercent?.toFixed(2)}%
+成交量: ${marketData.volume}
+市值: ${marketData.marketCap}
+${marketData.sma20 ? `20日均線 (SMA20): $${marketData.sma20.toFixed(2)}` : ''}
+${marketData.rsi14 ? `14日相對強弱指標 (RSI14): ${marketData.rsi14.toFixed(2)}` : ''}
+${marketData.oneMonthPerformance ? `近一個月歷史績效: ${marketData.oneMonthPerformance.toFixed(2)}%` : ''}
+
+--- 您的持股部位 ---
+${userPosition ? `股數: ${userPosition.shares}, 平均成本: $${userPosition.avgPrice.toFixed(2)}` : '目前未持有'}
+
+--- 最新新聞 ---
+${news.length > 0 ? news.map((n, i) => `${i + 1}. ${n.title} (${n.publisher})`).join('\n') : '目前暫無新聞，請利用 Google Search 獲取最新動態。'}
+
+請嚴格按照規定的 JSON 結構輸出。
+`;
+
+  const response = await ai.models.generateContent({
+    model: model,
+    contents: prompt,
+    config: {
+      systemInstruction,
+      responseMimeType: "application/json",
+      tools: [{ googleSearch: {} }],
+      safetySettings: [
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+      ],
+      maxOutputTokens: 8192,
+      temperature: 0.7,
+      topP: 0.95,
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          stock_name: { type: Type.STRING },
+          sentiment_score: { type: Type.NUMBER },
+          trend_prediction: { type: Type.STRING },
+          operation_advice: { type: Type.STRING },
+          decision_type: { type: Type.STRING, enum: ["buy", "hold", "sell"] },
+          confidence_level: { type: Type.STRING },
+          dashboard: {
+            type: Type.OBJECT,
+            properties: {
+              core_conclusion: {
+                type: Type.OBJECT,
+                properties: {
+                  one_sentence: { type: Type.STRING, description: "一句話核心結論" },
+                  signal_type: { type: Type.STRING, description: "如：買入、觀望" },
+                  time_sensitivity: { type: Type.STRING, description: "如：短期、中期" },
+                  position_advice: {
+                    type: Type.OBJECT,
+                    properties: {
+                      no_position: { type: Type.STRING, description: "空倉建議" },
+                      has_position: { type: Type.STRING, description: "持倉建議" }
+                    }
+                  }
+                }
+              },
+              data_perspective: {
+                type: Type.OBJECT,
+                properties: {
+                  trend_status: {
+                    type: Type.OBJECT,
+                    properties: {
+                      ma_alignment: { type: Type.STRING, description: "如：多頭排列" },
+                      is_bullish: { type: Type.BOOLEAN },
+                      trend_score: { type: Type.NUMBER }
+                    }
+                  },
+                  price_position: {
+                    type: Type.OBJECT,
+                    properties: {
+                      current_price: { type: Type.NUMBER },
+                      ma5: { type: Type.NUMBER },
+                      ma10: { type: Type.NUMBER },
+                      ma20: { type: Type.NUMBER },
+                      bias_ma5: { type: Type.NUMBER },
+                      bias_status: { type: Type.STRING },
+                      support_level: { type: Type.NUMBER },
+                      resistance_level: { type: Type.NUMBER }
+                    }
+                  },
+                  volume_analysis: {
+                    type: Type.OBJECT,
+                    properties: {
+                      volume_ratio: { type: Type.NUMBER },
+                      volume_status: { type: Type.STRING, description: "如：縮量、放量" },
+                      turnover_rate: { type: Type.NUMBER },
+                      volume_meaning: { type: Type.STRING, description: "一句話解釋成交量意義" }
+                    }
+                  },
+                  chip_structure: {
+                    type: Type.OBJECT,
+                    properties: {
+                      profit_ratio: { type: Type.NUMBER },
+                      avg_cost: { type: Type.NUMBER },
+                      concentration: { type: Type.NUMBER },
+                      chip_health: { type: Type.STRING }
+                    }
+                  }
+                }
+              },
+              intelligence: {
+                type: Type.OBJECT,
+                properties: {
+                  latest_news: { type: Type.STRING },
+                  risk_alerts: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  positive_catalysts: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  earnings_outlook: { type: Type.STRING },
+                  sentiment_summary: { type: Type.STRING }
+                }
+              },
+              battle_plan: {
+                type: Type.OBJECT,
+                properties: {
+                  sniper_points: {
+                    type: Type.OBJECT,
+                    properties: {
+                      ideal_buy: { type: Type.STRING },
+                      secondary_buy: { type: Type.STRING },
+                      stop_loss: { type: Type.STRING },
+                      take_profit: { type: Type.STRING }
+                    }
+                  },
+                  position_strategy: {
+                    type: Type.OBJECT,
+                    properties: {
+                      suggested_position: { type: Type.STRING },
+                      entry_plan: { type: Type.STRING },
+                      risk_control: { type: Type.STRING }
+                    }
+                  },
+                  action_checklist: { type: Type.ARRAY, items: { type: Type.STRING } }
+                }
+              }
+            }
+          },
+          full_report_markdown: { type: Type.STRING, description: "完整的 Markdown 報告，限 500 字" }
+        }
+      }
+    },
+  });
+
+  try {
+    const responseText = response.text;
+    console.log("AI Raw Response:", responseText);
+
+    if (!responseText || responseText === "undefined") {
+      console.error("AI returned invalid text:", responseText);
+      console.log("Full Response Object:", JSON.stringify(response, null, 2));
+      throw new Error("模型未返回有效內容 (Empty or Undefined)，請稍後再試。");
+    }
+
+    // Clean markdown code blocks if the model accidentally included them
+    let cleanJson = responseText.trim();
+    if (cleanJson.startsWith("```")) {
+      cleanJson = cleanJson.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+    }
+
+    const parsed = JSON.parse(cleanJson);
+    // Fix escaped newlines if they appear as literal \n or \r\n in the string
+    if (parsed.full_report_markdown && typeof parsed.full_report_markdown === 'string') {
+      parsed.full_report_markdown = parsed.full_report_markdown
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r')
+        .replace(/([^\n])\s*#\s/g, '$1\n\n# ');
+    }
+    
+    // Attach raw data for UI display
+    parsed.marketData = marketData;
+    parsed.position = userPosition;
+    
+    return parsed;
+  } catch (e) {
+    console.error("JSON parse error:", e);
+    if (e instanceof Error && e.message.includes("Unexpected token")) {
+      throw new Error("模型返回的數據格式錯誤，請嘗試重新生成。");
+    }
+    throw e;
+  }
+}
 
 export async function generateOpeningBellBrief(
   positions: PositionAnalytics[],
@@ -84,6 +361,9 @@ ${pos.ticker} 的相關新聞:
     contents: prompt,
     config: {
       tools: [{ googleSearch: {} }],
+      maxOutputTokens: 8192,
+      temperature: 0.7,
+      topP: 0.95,
     },
   });
 
@@ -200,6 +480,9 @@ ${marketData.oneMonthPerformance ? `近一個月歷史績效: ${marketData.oneMo
     contents: prompt,
     config: {
       tools: [{ googleSearch: {} }],
+      maxOutputTokens: 8192,
+      temperature: 0.7,
+      topP: 0.95,
     },
   });
 

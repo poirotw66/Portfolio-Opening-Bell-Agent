@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { SavedReport } from "../types";
 import { FileText, Trash2, Calendar, ChevronRight } from "lucide-react";
 import ReportDisplay from "../components/ReportDisplay";
+import { DecisionDashboardDisplay } from "../components/DecisionDashboardDisplay";
 import { motion, AnimatePresence } from "motion/react";
 
 export function SavedReportsPage() {
@@ -131,11 +132,15 @@ export function SavedReportsPage() {
                   {formatDate(selectedReport.date)}
                 </span>
                 <span className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded-md font-medium">
-                  {selectedReport.type === 'portfolio' ? '投資組合分析' : '單股開盤指南'}
+                  {selectedReport.type === 'portfolio' ? '投資組合分析' : '單股決策儀表盤'}
                 </span>
               </div>
             </div>
-            <ReportDisplay report={selectedReport.content} />
+            {selectedReport.dashboard ? (
+              <DecisionDashboardDisplay data={selectedReport.dashboard} />
+            ) : (
+              <ReportDisplay report={selectedReport.content} />
+            )}
           </div>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-8 text-center">

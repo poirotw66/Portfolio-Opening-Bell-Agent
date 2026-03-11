@@ -4,9 +4,10 @@ import { AlertCircle, Newspaper, Briefcase, Search, CheckCircle2 } from "lucide-
 import PortfolioInput from "../components/PortfolioInput";
 import { SingleStockInput } from "../components/SingleStockInput";
 import ReportDisplay from "../components/ReportDisplay";
-import { Position, PositionAnalytics, NewsItem, SavedReport } from "../types";
+import { Position, PositionAnalytics, NewsItem, SavedReport, DecisionDashboard } from "../types";
 import { fetchMarketData, fetchNews, fetchMarketContext } from "../services/marketService";
-import { generateOpeningBellBrief, generateSingleStockBrief } from "../services/geminiService";
+import { generateOpeningBellBrief, generateSingleStockDashboard } from "../services/geminiService";
+import { DecisionDashboardDisplay } from "../components/DecisionDashboardDisplay";
 
 export function AnalysisPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -16,6 +17,7 @@ export function AnalysisPage() {
 
   const [activeTab, setActiveTab] = useState<'portfolio' | 'singleStock'>('portfolio');
   const [singleStockReport, setSingleStockReport] = useState<string>("");
+  const [singleStockDashboard, setSingleStockDashboard] = useState<DecisionDashboard | null>(null);
   const [isSingleStockLoading, setIsSingleStockLoading] = useState(false);
   const [singleStockError, setSingleStockError] = useState<string>("");
   const [availableTickers, setAvailableTickers] = useState<string[]>([]);
@@ -34,27 +36,6 @@ export function AnalysisPage() {
       } catch (e) {}
     }
   }, []);
-
-  const handleSaveReport = (reportContent: string, reportType: 'portfolio' | 'single-stock', reportTickers: string[]) => {
-    let title = '投資組合分析報告';
-    if (reportType === 'single-stock' && reportTickers.length > 0) {
-      title = `${reportTickers[0]} 開盤指南`;
-    }
-
-    const newReport: SavedReport = {
-      id: Date.now().toString(),
-      title,
-      content: reportContent,
-      date: new Date().toISOString(),
-      type: reportType,
-      tickers: reportTickers
-    };
-    
-    const saved = localStorage.getItem('savedReports');
-    const reports: SavedReport[] = saved ? JSON.parse(saved) : [];
-    reports.unshift(newReport);
-    localStorage.setItem('savedReports', JSON.stringify(reports));
-  };
 
   const handleAnalyze = async () => {
     const saved = localStorage.getItem('portfolio');
@@ -113,7 +94,20 @@ export function AnalysisPage() {
       // Generate AI Report
       const aiReport = await generateOpeningBellBrief(analytics, marketContext, news, strategy as any);
       setReport(aiReport);
-      handleSaveReport(aiReport, 'portfolio', tickers);
+      
+      const newReport: SavedReport = {
+        id: Date.now().toString(),
+        title: '投資組合分析報告',
+        content: aiReport,
+        date: new Date().toISOString(),
+        type: 'portfolio',
+        tickers
+      };
+      
+      const savedReports = localStorage.getItem('savedReports');
+      const reports: SavedReport[] = savedReports ? JSON.parse(savedReports) : [];
+      reports.unshift(newReport);
+      localStorage.setItem('savedReports', JSON.stringify(reports));
     } catch (err: any) {
       let errorMessage = err.message || "分析過程中發生錯誤。";
       if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || errorMessage.includes("quota")) {
@@ -125,10 +119,14 @@ export function AnalysisPage() {
     }
   };
 
+  const [analysisStatus, setAnalysisStatus] = useState("");
+
   const handleSingleStockAnalyze = async (ticker: string) => {
     setIsSingleStockLoading(true);
+    setAnalysisStatus("正在取得市場數據...");
     setSingleStockError("");
     setSingleStockReport("");
+    setSingleStockDashboard(null);
     setActiveTab('singleStock');
 
     try {
@@ -138,6 +136,7 @@ export function AnalysisPage() {
         fetchMarketContext(),
       ]);
 
+      setAnalysisStatus("正在分析市場情報與新聞...");
       const data = marketData[0];
       if (data.error) {
         throw new Error(`無法取得 ${ticker} 的市場數據`);
@@ -157,9 +156,28 @@ export function AnalysisPage() {
       
       const position = currentPositions.find(p => p.ticker === ticker);
       const strategy = localStorage.getItem('investmentStrategy') || 'growth';
-      const aiReport = await generateSingleStockBrief(ticker, data, tickerNews, marketContext, position, strategy as any);
-      setSingleStockReport(aiReport);
-      handleSaveReport(aiReport, 'single-stock', [ticker]);
+      
+      setAnalysisStatus("AI 正在生成決策儀表盤與開盤指南...");
+      const dashboardData = await generateSingleStockDashboard(ticker, data, tickerNews, marketContext, position, strategy as any);
+      setSingleStockDashboard(dashboardData);
+      setSingleStockReport(dashboardData.full_report_markdown); 
+      setAnalysisStatus("");
+
+      const newReport: SavedReport = {
+        id: Date.now().toString(),
+        title: `${ticker.toUpperCase()} 決策儀表盤`,
+        content: dashboardData.full_report_markdown,
+        dashboard: dashboardData,
+        date: new Date().toISOString(),
+        type: 'single-stock',
+        tickers: [ticker.toUpperCase()]
+      };
+      
+      const savedReports = localStorage.getItem('savedReports');
+      const reports: SavedReport[] = savedReports ? JSON.parse(savedReports) : [];
+      reports.unshift(newReport);
+      localStorage.setItem('savedReports', JSON.stringify(reports));
+
     } catch (err: any) {
       let errorMessage = err.message || "分析過程中發生錯誤。";
       if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || errorMessage.includes("quota")) {
@@ -342,11 +360,21 @@ export function AnalysisPage() {
             {isSingleStockLoading && (
               <div className="h-full min-h-[400px] flex flex-col items-center justify-center text-slate-500 bg-white rounded-2xl border border-slate-200 shadow-sm">
                 <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4" />
-                <p className="text-sm font-medium animate-pulse">正在收集單股市場情報...</p>
+                <p className="text-sm font-medium animate-pulse">{analysisStatus || "正在收集單股市場情報..."}</p>
               </div>
             )}
 
-            {singleStockReport && !isSingleStockLoading && (
+            {singleStockDashboard && !isSingleStockLoading && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4 }}
+              >
+                <DecisionDashboardDisplay data={singleStockDashboard} />
+              </motion.div>
+            )}
+
+            {singleStockReport && !singleStockDashboard && !isSingleStockLoading && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}

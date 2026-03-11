@@ -68,6 +68,7 @@ async function startServer() {
           let sma20 = null;
           let rsi14 = null;
           let oneMonthPerformance = null;
+          let history: { date: string; close: number }[] = [];
           
           try {
             const endDate = new Date();
@@ -84,6 +85,12 @@ async function startServer() {
               const closePrices = historical.map(h => h.close);
               sma20 = calculateSMA(closePrices, 20);
               rsi14 = calculateRSI(closePrices, 14);
+              
+              // Map history for chart
+              history = historical.map(h => ({
+                date: h.date.toISOString().split('T')[0],
+                close: h.close
+              }));
               
               // Calculate 1-month performance (approx 21 trading days)
               if (closePrices.length >= 21) {
@@ -105,7 +112,8 @@ async function startServer() {
             marketCap: quote.marketCap,
             sma20,
             rsi14,
-            oneMonthPerformance
+            oneMonthPerformance,
+            history
           });
         } catch (err) {
           console.error(`Error fetching quote for ${ticker}:`, err);
@@ -122,7 +130,7 @@ async function startServer() {
 
   app.post("/api/news", async (req, res) => {
     try {
-      const { tickers } = req.body;
+      const { tickers, serpApiKey } = req.body;
       if (!Array.isArray(tickers) || tickers.length === 0) {
         return res.status(400).json({ error: "Invalid tickers array" });
       }
@@ -130,13 +138,29 @@ async function startServer() {
       const newsResults: Record<string, any[]> = {};
       for (const ticker of tickers) {
         try {
-          const news: any = await yahooFinance.search(ticker, { newsCount: 3 });
-          newsResults[ticker] = news.news.map((item) => ({
-            title: item.title,
-            publisher: item.publisher,
-            link: item.link,
-            providerPublishTime: item.providerPublishTime,
-          }));
+          if (serpApiKey) {
+            const url = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(ticker + ' stock')}&tbm=nws&api_key=${serpApiKey}`;
+            const response = await fetch(url);
+            if (!response.ok) {
+              throw new Error(`SerpAPI error: ${response.statusText}`);
+            }
+            const data = await response.json();
+            const results = data.news_results || [];
+            newsResults[ticker] = results.slice(0, 3).map((item: any) => ({
+              title: item.title,
+              publisher: item.source?.name || item.source || "News",
+              link: item.link,
+              providerPublishTime: item.date || new Date().toISOString(),
+            }));
+          } else {
+            const news: any = await yahooFinance.search(ticker, { newsCount: 3 });
+            newsResults[ticker] = news.news.map((item: any) => ({
+              title: item.title,
+              publisher: item.publisher,
+              link: item.link,
+              providerPublishTime: item.providerPublishTime,
+            }));
+          }
         } catch (err) {
           console.error(`Error fetching news for ${ticker}:`, err);
           newsResults[ticker] = [];
