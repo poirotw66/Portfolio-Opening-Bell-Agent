@@ -10,6 +10,38 @@ const STRATEGY_LABELS: Record<InvestmentStrategy, string> = {
   dca: '定期定額 (固定投入分散成本)',
 };
 
+function cleanRepetitiveSentences(text: string): string {
+  // Collapse pathological repetition of the special case sentence
+  let cleaned = text.replace(
+    /(數據不足，無法評估。)(\s*\1)+/g,
+    '$1'
+  );
+
+  // Optionally guard against extreme length
+  const maxLength = 200;
+  if (cleaned.length > maxLength) {
+    cleaned = cleaned.slice(0, maxLength);
+  }
+
+  return cleaned;
+}
+
+function sanitizeDashboardText(node: unknown): void {
+  if (!node || typeof node !== 'object') {
+    return;
+  }
+
+  const obj = node as Record<string, unknown>;
+  for (const key of Object.keys(obj)) {
+    const value = obj[key];
+    if (typeof value === 'string') {
+      obj[key] = cleanRepetitiveSentences(value);
+    } else if (value && typeof value === 'object') {
+      sanitizeDashboardText(value);
+    }
+  }
+}
+
 export async function generateSingleStockDashboard(
   ticker: string,
   marketData: any,
@@ -19,9 +51,9 @@ export async function generateSingleStockDashboard(
   strategy: InvestmentStrategy = 'growth'
 ): Promise<DecisionDashboard> {
   const manualKey = localStorage.getItem('customGeminiApiKey');
-  const apiKey = manualKey || process.env.API_KEY || process.env.GEMINI_API_KEY;
+  const apiKey = manualKey || import.meta.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("缺少 GEMINI_API_KEY。請在環境變數中設定。");
+    throw new Error("缺少 VITE_GEMINI_API_KEY。請在環境變數中設定。");
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -269,6 +301,9 @@ ${news.length > 0 ? news.map((n, i) => `${i + 1}. ${n.title} (來源: ${n.publis
         .replace(/\\r/g, '\r')
         .replace(/([^\n])\s*#\s/g, '$1\n\n# ');
     }
+
+    // Clean up any pathological repetitions inside dashboard text fields
+    sanitizeDashboardText(parsed);
     
     // Attach raw data for UI display
     parsed.marketData = marketData;
@@ -291,9 +326,9 @@ export async function generateOpeningBellBrief(
   strategy: InvestmentStrategy = 'growth'
 ): Promise<string> {
   const manualKey = localStorage.getItem('customGeminiApiKey');
-  const apiKey = manualKey || process.env.API_KEY || process.env.GEMINI_API_KEY;
+  const apiKey = manualKey || import.meta.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("缺少 GEMINI_API_KEY。請在環境變數中設定。");
+    throw new Error("缺少 VITE_GEMINI_API_KEY。請在環境變數中設定。");
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -377,9 +412,9 @@ export async function generateSingleStockBrief(
   strategy: InvestmentStrategy = 'growth'
 ): Promise<string> {
   const manualKey = localStorage.getItem('customGeminiApiKey');
-  const apiKey = manualKey || process.env.API_KEY || process.env.GEMINI_API_KEY;
+  const apiKey = manualKey || import.meta.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("缺少 GEMINI_API_KEY。請在環境變數中設定。");
+    throw new Error("缺少 VITE_GEMINI_API_KEY。請在環境變數中設定。");
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -441,17 +476,20 @@ ${marketData.oneMonthPerformance ? `近一個月歷史績效: ${marketData.oneMo
       let timeStr = "";
       if (n.providerPublishTime) {
         const publishDate = new Date(n.providerPublishTime);
-        const now = new Date();
-        const diffMs = now.getTime() - publishDate.getTime();
-        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-        const diffDays = Math.floor(diffHours / 24);
-        
-        if (diffHours < 1) {
-          timeStr = " (剛剛)";
-        } else if (diffHours < 24) {
-          timeStr = ` (${diffHours}小時前)`;
-        } else {
-          timeStr = ` (${diffDays}天前, ${publishDate.toISOString().split('T')[0].replace(/-/g, '')})`;
+        if (!Number.isNaN(publishDate.getTime())) {
+          const now = new Date();
+          const diffMs = now.getTime() - publishDate.getTime();
+          const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+          const diffDays = Math.floor(diffHours / 24);
+
+          if (diffHours < 1) {
+            timeStr = " (剛剛)";
+          } else if (diffHours < 24) {
+            timeStr = ` (${diffHours}小時前)`;
+          } else {
+            const isoDate = publishDate.toISOString().split("T")[0].replace(/-/g, "");
+            timeStr = ` (${diffDays}天前, ${isoDate})`;
+          }
         }
       }
       prompt += `${idx + 1}. ${n.title}${timeStr} (來源: ${n.publisher}, 連結: ${n.link})\n`;

@@ -1,51 +1,23 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { MarketGrid } from "../components/MarketGrid";
-import { Position, MarketData } from "../types";
-import { fetchMarketData } from "../services/marketService";
 import { AlertCircle, RefreshCw } from "lucide-react";
+import { usePortfolioMarketData } from "../hooks/usePortfolioMarketData";
 
 export function MarketPage() {
-  const [marketGridData, setMarketGridData] = useState<MarketData[]>([]);
-  const [savedPositions, setSavedPositions] = useState<Position[]>([]);
-  const [isGridLoading, setIsGridLoading] = useState(false);
-  const [error, setError] = useState<string>("");
-
-  const loadData = async () => {
-    const saved = localStorage.getItem('portfolio');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setSavedPositions(parsed);
-          setIsGridLoading(true);
-          setError("");
-          try {
-            const tickers = parsed.map(p => p.ticker);
-            const data = await fetchMarketData(tickers);
-            setMarketGridData(data);
-          } catch (err: any) {
-            console.error(err);
-            setError(err.message || "無法取得市場數據");
-          } finally {
-            setIsGridLoading(false);
-          }
-        }
-      } catch (e) {
-        console.error("Failed to parse portfolio", e);
-      }
-    }
-  };
-
-  useEffect(() => {
-    loadData();
-  }, []);
+  const {
+    positions: savedPositions,
+    marketData: marketGridData,
+    isLoading: isGridLoading,
+    error,
+    reload,
+  } = usePortfolioMarketData();
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-slate-900 tracking-tight">即時行情庫存</h2>
         <button 
-          onClick={loadData}
+          onClick={() => void reload()}
           disabled={isGridLoading}
           className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors disabled:opacity-50"
         >
