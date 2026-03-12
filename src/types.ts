@@ -68,7 +68,7 @@ export interface DecisionDashboard {
       action_checklist: string[];
     };
   };
-  full_report_markdown: string;
+  full_report_markdown?: string;
   marketData?: MarketData;
   position?: Position;
 }

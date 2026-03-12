@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { AlertCircle, Newspaper, Briefcase, Search, CheckCircle2 } from "lucide-react";
+import { AlertCircle, Newspaper, Briefcase, Search, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
 import PortfolioInput from "../components/PortfolioInput";
 import { SingleStockInput } from "../components/SingleStockInput";
 import ReportDisplay from "../components/ReportDisplay";
 import { Position, PositionAnalytics, NewsItem, SavedReport, DecisionDashboard } from "../types";
 import { fetchMarketData, fetchNews, fetchMarketContext } from "../services/marketService";
-import { generateOpeningBellBrief, generateSingleStockDashboard } from "../services/geminiService";
+import { generateOpeningBellBrief, generateSingleStockDashboard, generateSingleStockBrief } from "../services/geminiService";
 import { DecisionDashboardDisplay } from "../components/DecisionDashboardDisplay";
 
 export function AnalysisPage() {
@@ -20,6 +20,7 @@ export function AnalysisPage() {
   const [singleStockDashboard, setSingleStockDashboard] = useState<DecisionDashboard | null>(null);
   const [isSingleStockLoading, setIsSingleStockLoading] = useState(false);
   const [singleStockError, setSingleStockError] = useState<string>("");
+  const [isSingleStockExpanded, setIsSingleStockExpanded] = useState(true);
   const [availableTickers, setAvailableTickers] = useState<string[]>([]);
 
   const [savedPositions, setSavedPositions] = useState<Position[]>([]);
@@ -127,6 +128,7 @@ export function AnalysisPage() {
     setSingleStockError("");
     setSingleStockReport("");
     setSingleStockDashboard(null);
+    setIsSingleStockExpanded(true);
     setActiveTab('singleStock');
 
     try {
@@ -157,16 +159,22 @@ export function AnalysisPage() {
       const position = currentPositions.find(p => p.ticker === ticker);
       const strategy = localStorage.getItem('investmentStrategy') || 'growth';
       
-      setAnalysisStatus("AI 正在生成決策儀表盤與開盤指南...");
-      const dashboardData = await generateSingleStockDashboard(ticker, data, tickerNews, marketContext, position, strategy as any);
+      setAnalysisStatus("AI 正在同步生成儀表盤與報告...");
+      const [dashboardData, fullReport] = await Promise.all([
+        generateSingleStockDashboard(ticker, data, tickerNews, marketContext, position, strategy as any),
+        generateSingleStockBrief(ticker, data, tickerNews, marketContext, position, strategy as any)
+      ]);
+      
+      dashboardData.full_report_markdown = fullReport;
       setSingleStockDashboard(dashboardData);
-      setSingleStockReport(dashboardData.full_report_markdown); 
+      setSingleStockReport(fullReport); 
       setAnalysisStatus("");
 
+      const decisionEmoji = dashboardData.decision_type === 'buy' ? '🟢' : dashboardData.decision_type === 'sell' ? '🔴' : '🟡';
       const newReport: SavedReport = {
         id: Date.now().toString(),
-        title: `${ticker.toUpperCase()} 決策儀表盤`,
-        content: dashboardData.full_report_markdown,
+        title: `${decisionEmoji} ${dashboardData.stock_name || '單股指南報告'}`,
+        content: fullReport,
         dashboard: dashboardData,
         date: new Date().toISOString(),
         type: 'single-stock',
@@ -364,24 +372,52 @@ export function AnalysisPage() {
               </div>
             )}
 
-            {singleStockDashboard && !isSingleStockLoading && (
+            {(singleStockDashboard || singleStockReport) && !isSingleStockLoading && (
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4 }}
+                className="bg-zinc-950 rounded-3xl shadow-xl border border-white/10 overflow-hidden"
               >
-                <DecisionDashboardDisplay data={singleStockDashboard} />
-              </motion.div>
-            )}
+                {/* Header */}
+                <button 
+                  onClick={() => setIsSingleStockExpanded(!isSingleStockExpanded)}
+                  className="w-full flex items-center justify-between p-6 bg-zinc-900 hover:bg-zinc-800 transition-colors border-b border-white/5"
+                >
+                  <div className="flex items-center gap-4">
+                    <h2 className="text-xl font-bold text-white">
+                      {singleStockDashboard?.stock_name || '單股指南報告'}
+                    </h2>
+                    {singleStockDashboard?.decision_type && (
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium uppercase ${
+                        singleStockDashboard.decision_type === 'buy' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                        singleStockDashboard.decision_type === 'sell' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
+                        'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                      }`}>
+                        {singleStockDashboard.decision_type === 'buy' ? '建議買入' : 
+                         singleStockDashboard.decision_type === 'sell' ? '建議賣出' : '建議觀望'}
+                      </span>
+                    )}
+                  </div>
+                  {isSingleStockExpanded ? (
+                    <ChevronUp className="w-5 h-5 text-zinc-400" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-zinc-400" />
+                  )}
+                </button>
 
-            {singleStockReport && !singleStockDashboard && !isSingleStockLoading && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.4 }}
-                className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8 relative"
-              >
-                <ReportDisplay report={singleStockReport} />
+                {/* Content */}
+                {isSingleStockExpanded && (
+                  <div className="p-6">
+                    {singleStockDashboard ? (
+                      <DecisionDashboardDisplay data={singleStockDashboard} />
+                    ) : (
+                      <div className="bg-white rounded-2xl p-8">
+                        <ReportDisplay report={singleStockReport} />
+                      </div>
+                    )}
+                  </div>
+                )}
               </motion.div>
             )}
           </>

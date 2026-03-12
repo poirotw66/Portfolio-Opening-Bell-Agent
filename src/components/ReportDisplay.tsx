@@ -2,6 +2,7 @@ import React from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
+import rehypeRaw from "rehype-raw";
 
 interface Props {
   report: string;
@@ -22,7 +23,7 @@ export default function ReportDisplay({ report, className = "" }: Props) {
 
   return (
     <div className={`prose prose-slate max-w-none prose-headings:font-semibold prose-a:text-indigo-600 prose-table:border-collapse prose-th:border prose-th:border-slate-200 prose-th:p-2 prose-td:border prose-td:border-slate-200 prose-td:p-2 ${className}`}>
-      <Markdown remarkPlugins={[remarkGfm, remarkBreaks]}>{processedReport}</Markdown>
+      <Markdown remarkPlugins={[remarkGfm, remarkBreaks]} rehypePlugins={[rehypeRaw]}>{processedReport}</Markdown>
     </div>
   );
 }

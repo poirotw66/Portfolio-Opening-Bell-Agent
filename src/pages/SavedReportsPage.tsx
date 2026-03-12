@@ -90,11 +90,25 @@ export function SavedReportsPage() {
                     }`}
                   >
                     <div className="flex justify-between items-start mb-2">
-                      <h3 className={`font-semibold text-sm line-clamp-2 ${
-                        selectedReport?.id === report.id ? 'text-indigo-900' : 'text-slate-900'
-                      }`}>
-                        {report.title}
-                      </h3>
+                      <div className="flex flex-col gap-1">
+                        <h3 className={`font-semibold text-sm line-clamp-2 ${
+                          selectedReport?.id === report.id ? 'text-indigo-900' : 'text-slate-900'
+                        }`}>
+                          {report.title}
+                        </h3>
+                        {report.dashboard?.decision_type && (
+                          <div className="flex mt-1">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
+                              report.dashboard.decision_type === 'buy' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                              report.dashboard.decision_type === 'sell' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' :
+                              'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                            }`}>
+                              {report.dashboard.decision_type === 'buy' ? '建議買入' : 
+                               report.dashboard.decision_type === 'sell' ? '建議賣出' : '建議觀望'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                       <button 
                         onClick={(e) => handleDelete(report.id, e)}
                         className="text-slate-400 hover:text-red-500 p-1 rounded-md hover:bg-red-50 transition-colors shrink-0 ml-2"
@@ -125,7 +139,19 @@ export function SavedReportsPage() {
         {selectedReport ? (
           <div className="flex-1 overflow-y-auto p-6">
             <div className="mb-6 pb-6 border-b border-slate-100">
-              <h2 className="text-2xl font-bold text-slate-900 mb-2">{selectedReport.title}</h2>
+              <div className="flex items-center gap-3 mb-2">
+                <h2 className="text-2xl font-bold text-slate-900">{selectedReport.title}</h2>
+                {selectedReport.dashboard?.decision_type && (
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase border ${
+                    selectedReport.dashboard.decision_type === 'buy' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                    selectedReport.dashboard.decision_type === 'sell' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' :
+                    'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                  }`}>
+                    {selectedReport.dashboard.decision_type === 'buy' ? '建議買入' : 
+                     selectedReport.dashboard.decision_type === 'sell' ? '建議賣出' : '建議觀望'}
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-4 text-sm text-slate-500">
                 <span className="flex items-center gap-1">
                   <Calendar className="w-4 h-4" />

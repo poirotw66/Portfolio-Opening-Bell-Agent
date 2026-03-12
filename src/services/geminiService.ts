@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold } from "@google/genai";
+import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold, ThinkingLevel } from "@google/genai";
 import { PositionAnalytics, MarketContext, NewsItem, InvestmentStrategy, DecisionDashboard } from "../types";
 
 const STRATEGY_LABELS: Record<InvestmentStrategy, string> = {
@@ -75,26 +75,23 @@ export async function generateSingleStockDashboard(
 2. 應用交易策略評估。
 3. 輸出格式必須為有效的決策儀表盤 JSON。
 4. 風險優先排查。
-5. **極度重要：所有 JSON 字串欄位必須只包含「一句話」，字數嚴格限制在 30 字以內，絕對不可重複生成多個結論。**
-7. **嚴禁重複：任何欄位的值絕對不能出現無意義的重複字詞（例如：不斷重複「子層面優異性高」）。如果發現重複，請立即停止該句子的生成。**
-8. **full_report_markdown 的長度請控制在 500 字以內，只講重點。**
+5. **極度重要：所有 JSON 字串欄位必須只包含「一句話」，字數嚴格限制在 20-30 字以內，絕對不可重複生成多個結論。**
+6. **嚴禁循環重複：嚴禁在任何欄位中出現循環重複的字句。如果發現自己開始重複相同的詞彙或短語，請立即停止該欄位的生成並進入下一個欄位。**
+7. **禁止幻覺：若無數據支持，請回答「數據不足，無法評估」，不要編造數據或重複無意義的套話。**
 `;
 
   let prompt = `請針對股票「${ticker}」生成決策儀表盤 JSON。
 使用者的投資策略是：${STRATEGY_LABELS[strategy] || strategy}。
 
-請務必在「full_report_markdown」欄位中生成一份完整的開盤指南報告。
-**格式要求：**
-- 每個章節必須以 \`##\` 開頭並換行。
-- 確保標題符號 \`#\` 前面有換行符，不要接在上一段文字後面。
+**極重要：JSON 內的所有文字欄位（如 trend_prediction, operation_advice 等）字數必須嚴格限制在 30 字以內，禁止任何形式的循環重複。**
+
+請務必生成一份精簡的決策數據。
 
 包含以下區塊：
-1. ## 🔔 開盤指南摘要 (Executive Summary)
-2. ## 📈 價格動能與技術面分析 (Technical Analysis)
-3. ## 📰 關鍵新聞與催化劑 (News & Catalysts)
-4. ## 🌍 大盤環境影響 (Market Context)
-5. ## 🛠 今日交易策略 (Trading Strategy)
-6. ## 🔗 參考資料 (Sources)
+1. 核心結論 (Core Conclusion)
+2. 數據透視 (Data Perspective)
+3. 市場情報 (Intelligence)
+4. 戰鬥計畫 (Battle Plan)
 
 以下是相關數據：
 
@@ -115,7 +112,7 @@ ${marketData.oneMonthPerformance ? `近一個月歷史績效: ${marketData.oneMo
 ${userPosition ? `股數: ${userPosition.shares}, 平均成本: $${userPosition.avgPrice.toFixed(2)}` : '目前未持有'}
 
 --- 最新新聞 ---
-${news.length > 0 ? news.map((n, i) => `${i + 1}. ${n.title} (${n.publisher})`).join('\n') : '目前暫無新聞，請利用 Google Search 獲取最新動態。'}
+${news.length > 0 ? news.map((n, i) => `${i + 1}. ${n.title} (來源: ${n.publisher}, 連結: ${n.link})`).join('\n') : '目前暫無新聞，請利用 Google Search 獲取最新動態。'}
 
 請嚴格按照規定的 JSON 結構輸出。
 `;
@@ -133,16 +130,17 @@ ${news.length > 0 ? news.map((n, i) => `${i + 1}. ${n.title} (${n.publisher})`).
         { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
         { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
       ],
-      maxOutputTokens: 8192,
-      temperature: 0.7,
+      maxOutputTokens: 16384,
+      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+      temperature: 1.0,
       topP: 0.95,
       responseSchema: {
         type: Type.OBJECT,
         properties: {
           stock_name: { type: Type.STRING },
           sentiment_score: { type: Type.NUMBER },
-          trend_prediction: { type: Type.STRING },
-          operation_advice: { type: Type.STRING },
+          trend_prediction: { type: Type.STRING, description: "一句話趨勢預測，限 30 字內，禁止重複" },
+          operation_advice: { type: Type.STRING, description: "一句話操作建議，限 30 字內，禁止重複" },
           decision_type: { type: Type.STRING, enum: ["buy", "hold", "sell"] },
           confidence_level: { type: Type.STRING },
           dashboard: {
@@ -241,8 +239,7 @@ ${news.length > 0 ? news.map((n, i) => `${i + 1}. ${n.title} (${n.publisher})`).
                 }
               }
             }
-          },
-          full_report_markdown: { type: Type.STRING, description: "完整的 Markdown 報告，限 500 字" }
+          }
         }
       }
     },
@@ -354,6 +351,7 @@ ${pos.ticker} 的相關新聞:
 - 參考資料 (Sources) - 列出所有參考新聞的標題與原始連結。
 
 請在報告結尾加上免責聲明：『本報告僅供參考，不構成投資建議。投資有風險，入市需謹慎。』
+**注意：請勿使用 HTML 標籤 (如 <span>) 來標示顏色，請直接使用 Emoji (如 🟢/🔴) 或純文字來表示正負數值。**
 `;
 
   const response = await ai.models.generateContent({
@@ -362,7 +360,7 @@ ${pos.ticker} 的相關新聞:
     config: {
       tools: [{ googleSearch: {} }],
       maxOutputTokens: 8192,
-      temperature: 0.7,
+      temperature: 1.0,
       topP: 0.95,
     },
   });
@@ -473,6 +471,7 @@ ${marketData.oneMonthPerformance ? `近一個月歷史績效: ${marketData.oneMo
 6. 🔗 參考資料 (Sources) - 列出所有參考新聞的標題與原始連結。
 
 請在報告結尾加上免責聲明：『本報告僅供參考，不構成投資建議。投資有風險，入市需謹慎。』
+**注意：請勿使用 HTML 標籤 (如 <span>) 來標示顏色，請直接使用 Emoji (如 🟢/🔴) 或純文字來表示正負數值。**
 `;
 
   const response = await ai.models.generateContent({
@@ -481,7 +480,7 @@ ${marketData.oneMonthPerformance ? `近一個月歷史績效: ${marketData.oneMo
     config: {
       tools: [{ googleSearch: {} }],
       maxOutputTokens: 8192,
-      temperature: 0.7,
+      temperature: 1.0,
       topP: 0.95,
     },
   });
