@@ -6,9 +6,9 @@ import {defineConfig, loadEnv} from 'vite';
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
   return {
-    // When deployed to GitHub Pages, the app is served under /Portfolio-Opening-Bell-Agent/
-    // Adjust this if you rename the repository.
-    base: '/Portfolio-Opening-Bell-Agent/',
+    // When deploying to a root domain (e.g. Render, localhost:3000),
+    // static assets should be served from the root.
+    base: '/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
