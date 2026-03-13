@@ -1,5 +1,17 @@
 import { MarketData, NewsItem, MarketContext } from "../types";
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+
+function withApiBase(path: string): string {
+  if (!API_BASE) {
+    return path;
+  }
+  if (API_BASE.endsWith("/")) {
+    return `${API_BASE.replace(/\/+$/, "")}${path}`;
+  }
+  return `${API_BASE}${path}`;
+}
+
 async function fetchWithTimeout(
   resource: string,
   options: RequestInit = {},
@@ -40,7 +52,7 @@ async function throwApiError(response: Response, fallbackMessage: string): Promi
 }
 
 export async function fetchMarketData(tickers: string[]): Promise<MarketData[]> {
-  const response = await fetchWithTimeout("/api/market-data", {
+  const response = await fetchWithTimeout(withApiBase("/api/market-data"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tickers }),
@@ -54,7 +66,7 @@ export async function fetchMarketData(tickers: string[]): Promise<MarketData[]> 
 
 export async function fetchNews(tickers: string[]): Promise<Record<string, NewsItem[]>> {
   const serpApiKey = localStorage.getItem("serpApiKey");
-  const response = await fetchWithTimeout("/api/news", {
+  const response = await fetchWithTimeout(withApiBase("/api/news"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tickers, serpApiKey }),
@@ -67,7 +79,7 @@ export async function fetchNews(tickers: string[]): Promise<Record<string, NewsI
 }
 
 export async function fetchMarketContext(): Promise<MarketContext> {
-  const response = await fetchWithTimeout("/api/market-context");
+  const response = await fetchWithTimeout(withApiBase("/api/market-context"));
   if (!response.ok) {
     await throwApiError(response, "取得市場情境失敗");
   }
