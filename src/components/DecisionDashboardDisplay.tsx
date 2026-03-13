@@ -13,7 +13,47 @@ interface Props {
   data: DecisionDashboard;
 }
 
+/** Derive display values from real market data when AI dashboard fields are missing or zero. */
+function getResolvedDataPerspective(data: DecisionDashboard) {
+  const dp = data.dashboard?.data_perspective;
+  const md = data.marketData;
+
+  const biasMa20 = md?.sma20 != null && md.price != null && md.sma20 > 0
+    ? ((md.price - md.sma20) / md.sma20) * 100
+    : null;
+  const maAlignment =
+    dp?.trend_status?.ma_alignment && dp.trend_status.ma_alignment !== '數據讀取中'
+      ? dp.trend_status.ma_alignment
+      : md?.sma20 != null && md.price != null
+        ? (md.price >= md.sma20 ? '價在 MA20 之上' : '價在 MA20 之下')
+        : '—';
+  const isBullish =
+    dp?.trend_status?.is_bullish ?? (md?.sma20 != null && md.price != null ? md.price >= md.sma20 : null);
+  const trendScore = dp?.trend_status?.trend_score ?? (typeof dp?.trend_status?.trend_score === 'number' && dp.trend_status.trend_score > 0 ? dp.trend_status.trend_score : null);
+  const supportLevel = dp?.price_position?.support_level ?? (md?.sma20 != null ? md.sma20 * 0.97 : null);
+  const resistanceLevel = dp?.price_position?.resistance_level ?? (md?.sma20 != null ? md.sma20 * 1.03 : null);
+  const volumeStatus =
+    dp?.volume_analysis?.volume_status && dp.volume_analysis.volume_status !== 'N/A'
+      ? dp.volume_analysis.volume_status
+      : md?.volume != null
+        ? `成交量 ${md.volume.toLocaleString()}`
+        : '—';
+
+  return {
+    maAlignment,
+    isBullish,
+    trendScore,
+    biasMa20,
+    biasStatus: dp?.price_position?.bias_status || (biasMa20 != null ? (biasMa20 > 5 ? '偏高' : biasMa20 < -2 ? '偏低' : '中性') : 'N/A'),
+    supportLevel,
+    resistanceLevel,
+    volumeStatus,
+  };
+}
+
 export const DecisionDashboardDisplay: React.FC<Props> = ({ data }) => {
+  const resolved = getResolvedDataPerspective(data);
+
   const getDecisionColor = (type: string) => {
     switch (type) {
       case 'buy': return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
@@ -165,7 +205,7 @@ export const DecisionDashboardDisplay: React.FC<Props> = ({ data }) => {
 
       {/* Main Dashboard Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Data Perspective */}
+        {/* Data Perspective: merge AI dashboard with real marketData when AI fields are empty */}
         <div className="space-y-4">
           <h3 className="text-sm font-mono uppercase tracking-widest text-zinc-500 flex items-center gap-2">
             <BarChart3 className="w-4 h-4" /> 數據透視分析
@@ -175,13 +215,13 @@ export const DecisionDashboardDisplay: React.FC<Props> = ({ data }) => {
               <div className="space-y-1">
                 <span className="text-xs text-zinc-500">趨勢狀態</span>
                 <div className="flex items-center gap-2 text-white font-medium">
-                  {data.dashboard?.data_perspective?.trend_status?.is_bullish ? <TrendingUp className="w-4 h-4 text-emerald-500" /> : <TrendingDown className="w-4 h-4 text-rose-500" />}
-                  {data.dashboard?.data_perspective?.trend_status?.ma_alignment || '數據讀取中'}
+                  {resolved.isBullish === true ? <TrendingUp className="w-4 h-4 text-emerald-500" /> : resolved.isBullish === false ? <TrendingDown className="w-4 h-4 text-rose-500" /> : <Minus className="w-4 h-4 text-zinc-500" />}
+                  {resolved.maAlignment}
                 </div>
               </div>
               <div className="space-y-1">
                 <span className="text-xs text-zinc-500">趨勢強度評分</span>
-                <div className="text-white font-medium">{data.dashboard?.data_perspective?.trend_status?.trend_score || 0}/100</div>
+                <div className="text-white font-medium">{resolved.trendScore != null ? `${resolved.trendScore}/100` : '—'}</div>
               </div>
             </div>
 
@@ -189,25 +229,25 @@ export const DecisionDashboardDisplay: React.FC<Props> = ({ data }) => {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <span className="text-xs text-zinc-500">乖離率 (MA5)</span>
-                <div className={`font-medium ${(data.dashboard?.data_perspective?.price_position?.bias_ma5 || 0) > 5 ? 'text-rose-500' : 'text-emerald-500'}`}>
-                  {(data.dashboard?.data_perspective?.price_position?.bias_ma5 || 0).toFixed(2)}% ({data.dashboard?.data_perspective?.price_position?.bias_status || 'N/A'})
+                <span className="text-xs text-zinc-500">乖離率 (MA20)</span>
+                <div className={`font-medium ${(resolved.biasMa20 ?? 0) > 5 ? 'text-rose-500' : (resolved.biasMa20 ?? 0) < -2 ? 'text-emerald-500' : 'text-zinc-300'}`}>
+                  {resolved.biasMa20 != null ? `${resolved.biasMa20.toFixed(2)}% (${resolved.biasStatus})` : 'N/A'}
                 </div>
               </div>
               <div className="space-y-1">
                 <span className="text-xs text-zinc-500">成交量能狀態</span>
-                <div className="text-white font-medium">{data.dashboard?.data_perspective?.volume_analysis?.volume_status || 'N/A'}</div>
+                <div className="text-white font-medium">{resolved.volumeStatus}</div>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-xs">
               <div className="flex justify-between text-zinc-500">
                 <span>關鍵支撐位</span>
-                <span className="text-white">${data.dashboard?.data_perspective?.price_position?.support_level || 0}</span>
+                <span className="text-white">{resolved.supportLevel != null ? `$${resolved.supportLevel.toFixed(2)}` : '—'}</span>
               </div>
               <div className="flex justify-between text-zinc-500">
                 <span>關鍵壓力位</span>
-                <span className="text-white">${data.dashboard?.data_perspective?.price_position?.resistance_level || 0}</span>
+                <span className="text-white">{resolved.resistanceLevel != null ? `$${resolved.resistanceLevel.toFixed(2)}` : '—'}</span>
               </div>
             </div>
           </div>
