@@ -62,7 +62,15 @@ export function AnalysisPage() {
       setError("請先在「個人設定」中設定您的投資組合部位。");
       return;
     }
-    
+
+    const apiKey =
+      localStorage.getItem("customGeminiApiKey") ||
+      (import.meta.env?.VITE_GEMINI_API_KEY as string | undefined);
+    if (!apiKey?.trim()) {
+      setError("請先在「系統設定」中設定 Gemini API Key（或於 .env.local 設定 VITE_GEMINI_API_KEY）。");
+      return;
+    }
+
     setIsLoading(true);
     setError("");
     setReport("");
@@ -152,6 +160,16 @@ export function AnalysisPage() {
   const [analysisStatus, setAnalysisStatus] = useState("");
 
   const handleSingleStockAnalyze = async (ticker: string) => {
+    const apiKey =
+      localStorage.getItem("customGeminiApiKey") ||
+      (import.meta.env?.VITE_GEMINI_API_KEY as string | undefined);
+    if (!apiKey?.trim()) {
+      setSingleStockError(
+        "請先在「系統設定」中設定 Gemini API Key（或於 .env.local 設定 VITE_GEMINI_API_KEY）。"
+      );
+      return;
+    }
+
     setIsSingleStockLoading(true);
     setAnalysisStatus("正在取得市場數據...");
     setSingleStockError("");
@@ -169,6 +187,9 @@ export function AnalysisPage() {
 
       setAnalysisStatus("正在分析市場情報與新聞...");
       const data = marketData[0];
+      if (!data) {
+        throw new Error(`無法取得 ${ticker} 的市場數據，請確認代號是否正確。`);
+      }
       if (data.error) {
         throw new Error(`無法取得 ${ticker} 的市場數據`);
       }
