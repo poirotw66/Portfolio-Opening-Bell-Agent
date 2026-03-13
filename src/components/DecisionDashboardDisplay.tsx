@@ -2,10 +2,10 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { 
   TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, 
-  Target, Shield, Zap, BarChart3, PieChart, Info,
+  Target, Zap, BarChart3,
   ArrowUpRight, ArrowDownRight, Minus, FileText
 } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { DecisionDashboard } from '../types';
 import ReportDisplay from './ReportDisplay';
 
@@ -70,9 +70,10 @@ export const DecisionDashboardDisplay: React.FC<Props> = ({ data }) => {
 
   return (
     <div className="space-y-8">
-      {/* Stock Info Card */}
+      {/* Stock Info Card - captured as image for single-stock report download */}
       {data.marketData && (
-        <motion.div 
+        <motion.div
+          data-download-capture="stock-info-card"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           className="p-6 rounded-2xl bg-zinc-900 border border-white/5 relative overflow-hidden"
@@ -110,7 +111,10 @@ export const DecisionDashboardDisplay: React.FC<Props> = ({ data }) => {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 pt-4 border-t border-white/5">
+          <div
+            className="grid grid-cols-3 gap-4 pt-4 border-t border-white/5"
+            style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}
+          >
             <div>
               <div className="text-xs text-zinc-500 mb-1">SMA 20</div>
               <div className="text-sm text-white font-medium">${data.marketData.sma20?.toFixed(2) || 'N/A'}</div>
@@ -128,8 +132,12 @@ export const DecisionDashboardDisplay: React.FC<Props> = ({ data }) => {
           </div>
 
           {data.marketData.history && data.marketData.history.length > 0 && (
-            <div className="mt-6 h-48 w-full min-h-[12rem]">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+            <div
+              className="mt-6 w-full"
+              data-pdf-chart="true"
+              style={{ height: 192, minHeight: 192, overflow: "hidden" }}
+            >
+              <ResponsiveContainer width="100%" height={192} minWidth={320} minHeight={192}>
                 <LineChart data={data.marketData.history}>
                   <XAxis 
                     dataKey="date" 
@@ -143,7 +151,7 @@ export const DecisionDashboardDisplay: React.FC<Props> = ({ data }) => {
                     contentStyle={{ backgroundColor: '#18181b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
                     itemStyle={{ color: '#fff' }}
                     labelStyle={{ color: '#a1a1aa', marginBottom: '4px' }}
-                    formatter={(value: number) => [`$${value.toFixed(2)}`, 'Price']}
+                    formatter={(value: unknown) => [`$${(value as number).toFixed(2)}`, 'Price']}
                   />
                   <Line 
                     type="monotone" 
@@ -160,8 +168,16 @@ export const DecisionDashboardDisplay: React.FC<Props> = ({ data }) => {
         </motion.div>
       )}
 
-      {/* Header Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Header Summary - force 3-col on wide viewport so PDF export keeps layout */}
+      <div
+        data-download-capture="header-summary"
+        className="grid grid-cols-1 md:grid-cols-3 gap-4"
+        style={
+          typeof window !== "undefined" && window.innerWidth >= 768
+            ? { gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }
+            : undefined
+        }
+      >
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -345,7 +361,7 @@ export const DecisionDashboardDisplay: React.FC<Props> = ({ data }) => {
           <FileText className="w-4 h-4" /> 詳細開盤指南報告
         </h3>
         <div className="p-8 rounded-3xl bg-white shadow-sm border border-slate-200">
-          <ReportDisplay report={data.full_report_markdown} />
+          <ReportDisplay report={data.full_report_markdown ?? ''} />
         </div>
       </div>
     </div>
