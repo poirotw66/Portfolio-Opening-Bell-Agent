@@ -27,7 +27,6 @@
     "rehype-raw": "^7.0.0",
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
-    "vite": "^6.2.0",
     "yahoo-finance2": "^3.13.2"
   },
   "devDependencies": {

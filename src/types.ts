@@ -25,7 +25,26 @@ export interface NewsItem {
   providerPublishTime: string | number | Date;
 }
 
-export type InvestmentStrategy = 'value' | 'growth' | 'index' | 'dividend' | 'technical' | 'dca';
+export type InvestmentStrategy =
+  | "value"
+  | "growth"
+  | "index"
+  | "dividend"
+  | "technical"
+  | "dca";
+
+const INVESTMENT_STRATEGIES: InvestmentStrategy[] = [
+  "value",
+  "growth",
+  "index",
+  "dividend",
+  "technical",
+  "dca",
+];
+
+export function isInvestmentStrategy(s: string): s is InvestmentStrategy {
+  return (INVESTMENT_STRATEGIES as readonly string[]).includes(s);
+}
 
 export interface UserProfile {
   portfolio: Position[];

@@ -1,8 +1,22 @@
 import express from "express";
 import { createServer as createViteServer } from "vite";
 import yahooFinance2 from "yahoo-finance2";
+import type { MarketData, MarketContext, NewsItem } from "./src/types";
+import type {
+  YahooQuoteResult,
+  YahooHistoricalCandle,
+  YahooSearchNewsResult,
+  YahooFinanceClient,
+  SerpApiSearchResponse,
+  SerpNewsItem,
+} from "./server-types";
 
-const yahooFinance = new (yahooFinance2 as any)({ suppressNotices: ['yahooSurvey', 'ripHistorical'] });
+const YahooFinanceCtor = yahooFinance2 as unknown as new (opts: {
+  suppressNotices: string[];
+}) => YahooFinanceClient;
+const yahooFinance = new YahooFinanceCtor({
+  suppressNotices: ["yahooSurvey", "ripHistorical"],
+});
 
 function calculateSMA(data: number[], period: number): number | null {
   if (data.length < period) return null;
@@ -49,7 +63,7 @@ async function startServer() {
   app.use(express.json());
 
   // API Routes
-  app.get("/api/health", (req, res) => {
+  app.get("/api/health", (_req, res) => {
     res.json({ status: "ok" });
   });
 
@@ -60,36 +74,39 @@ async function startServer() {
         return res.status(400).json({ error: "Invalid tickers array" });
       }
 
-      const results: any[] = [];
+      const results: MarketData[] = [];
       for (const ticker of tickers) {
         try {
-          const quote: any = await yahooFinance.quote(ticker);
-          
-          let sma20 = null;
-          let rsi14 = null;
-          let oneMonthPerformance = null;
+          const quote: YahooQuoteResult = await yahooFinance.quote(ticker);
+
+          let sma20: number | null = null;
+          let rsi14: number | null = null;
+          let oneMonthPerformance: number | null = null;
           let history: { date: string; close: number }[] = [];
-          
+
           try {
             const endDate = new Date();
             const startDate = new Date();
             startDate.setDate(endDate.getDate() - 60);
-            
-            const historical = await yahooFinance.historical(ticker, {
-              period1: startDate,
-              period2: endDate,
-              interval: '1d'
-            });
-            
-            if (historical && historical.length > 0) {
-              const closePrices = historical.map(h => h.close);
+
+            const historical: YahooHistoricalCandle[] = await yahooFinance.historical(
+              ticker,
+              {
+                period1: startDate,
+                period2: endDate,
+                interval: "1d",
+              }
+            );
+
+            if (historical.length > 0) {
+              const closePrices = historical.map((h) => h.close);
               sma20 = calculateSMA(closePrices, 20);
               rsi14 = calculateRSI(closePrices, 14);
               
               // Map history for chart
-              history = historical.map(h => ({
-                date: h.date.toISOString().split('T')[0],
-                close: h.close
+              history = historical.map((h) => ({
+                date: h.date.toISOString().split("T")[0],
+                close: h.close,
               }));
               
               // Calculate 1-month performance (approx 21 trading days)
@@ -117,7 +134,15 @@ async function startServer() {
           });
         } catch (err) {
           console.error(`Error fetching quote for ${ticker}:`, err);
-          results.push({ ticker, error: "Failed to fetch data" });
+          results.push({
+            ticker,
+            error: "Failed to fetch data",
+            price: 0,
+            change: 0,
+            changePercent: 0,
+            volume: 0,
+            marketCap: 0,
+          });
         }
       }
 
@@ -135,30 +160,34 @@ async function startServer() {
         return res.status(400).json({ error: "Invalid tickers array" });
       }
 
-      const newsResults: Record<string, any[]> = {};
+      const newsResults: Record<string, NewsItem[]> = {};
       for (const ticker of tickers) {
         try {
           if (serpApiKey) {
-            const url = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(ticker + ' stock')}&tbm=nws&api_key=${serpApiKey}`;
+            const url = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(ticker + " stock")}&tbm=nws&api_key=${serpApiKey}`;
             const response = await fetch(url);
             if (!response.ok) {
               throw new Error(`SerpAPI error: ${response.statusText}`);
             }
-            const data = await response.json();
-            const results = data.news_results || [];
-            newsResults[ticker] = results.slice(0, 3).map((item: any) => ({
-              title: item.title,
-              publisher: item.source?.name || item.source || "News",
-              link: item.link,
-              providerPublishTime: item.date || new Date().toISOString(),
+            const data = (await response.json()) as SerpApiSearchResponse;
+            const rawResults = data.news_results ?? [];
+            newsResults[ticker] = rawResults.slice(0, 3).map((item: SerpNewsItem) => ({
+              title: item.title ?? "",
+              publisher:
+                (typeof item.source === "object" && item.source?.name) ||
+                (typeof item.source === "string" ? item.source : "News"),
+              link: item.link ?? "",
+              providerPublishTime: item.date ?? new Date().toISOString(),
             }));
           } else {
-            const news: any = await yahooFinance.search(ticker, { newsCount: 3 });
-            newsResults[ticker] = news.news.map((item: any) => ({
+            const news: YahooSearchNewsResult = await yahooFinance.search(ticker, {
+              newsCount: 3,
+            });
+            newsResults[ticker] = news.news.map((item) => ({
               title: item.title,
               publisher: item.publisher,
               link: item.link,
-              providerPublishTime: item.providerPublishTime,
+              providerPublishTime: item.providerPublishTime ?? new Date().toISOString(),
             }));
           }
         } catch (err) {
@@ -174,13 +203,13 @@ async function startServer() {
     }
   });
 
-  app.get("/api/market-context", async (req, res) => {
+  app.get("/api/market-context", async (_req, res) => {
     try {
       const indices = ["^IXIC", "^GSPC"]; // NASDAQ, S&P 500
-      const results: Record<string, any> = {};
+      const results: MarketContext = {};
       for (const index of indices) {
         try {
-          const quote: any = await yahooFinance.quote(index);
+          const quote: YahooQuoteResult = await yahooFinance.quote(index);
           results[index] = {
             price: quote.regularMarketPrice,
             changePercent: quote.regularMarketChangePercent,

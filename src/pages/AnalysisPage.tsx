@@ -4,7 +4,15 @@ import { AlertCircle, Newspaper, Briefcase, Search, CheckCircle2, ChevronDown, C
 import PortfolioInput from "../components/PortfolioInput";
 import { SingleStockInput } from "../components/SingleStockInput";
 import ReportDisplay from "../components/ReportDisplay";
-import { Position, PositionAnalytics, NewsItem, SavedReport, DecisionDashboard } from "../types";
+import {
+  Position,
+  PositionAnalytics,
+  NewsItem,
+  SavedReport,
+  DecisionDashboard,
+  InvestmentStrategy,
+  isInvestmentStrategy,
+} from "../types";
 import { fetchMarketData, fetchNews, fetchMarketContext } from "../services/marketService";
 import { generateOpeningBellBrief, generateSingleStockDashboard, generateSingleStockBrief } from "../services/geminiService";
 import { DecisionDashboardDisplay } from "../components/DecisionDashboardDisplay";
@@ -31,8 +39,9 @@ export function AnalysisPage() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setSavedPositions(parsed);
-          setAvailableTickers(Array.from(new Set(parsed.map((p: any) => p.ticker))));
+          const positions = parsed as Position[];
+          setSavedPositions(positions);
+          setAvailableTickers(Array.from(new Set(positions.map((p) => p.ticker))));
         }
       } catch (e) {}
     }
@@ -62,7 +71,10 @@ export function AnalysisPage() {
 
     try {
       const tickers = currentPositions.map((p) => p.ticker);
-      const strategy = localStorage.getItem('investmentStrategy') || 'growth';
+      const strategyRaw = localStorage.getItem("investmentStrategy") ?? "growth";
+      const strategy: InvestmentStrategy = isInvestmentStrategy(strategyRaw)
+        ? strategyRaw
+        : "growth";
 
       // Fetch all data in parallel
       const [marketData, news, marketContext] = await Promise.all([
@@ -93,7 +105,12 @@ export function AnalysisPage() {
       });
 
       // Generate AI Report
-      const aiReport = await generateOpeningBellBrief(analytics, marketContext, news, strategy as any);
+      const aiReport = await generateOpeningBellBrief(
+        analytics,
+        marketContext,
+        news,
+        strategy
+      );
       setReport(aiReport);
       
       const newReport: SavedReport = {
@@ -109,12 +126,22 @@ export function AnalysisPage() {
       const reports: SavedReport[] = savedReports ? JSON.parse(savedReports) : [];
       reports.unshift(newReport);
       localStorage.setItem('savedReports', JSON.stringify(reports));
-    } catch (err: any) {
-      let errorMessage = err.message || "分析過程中發生錯誤。";
-      if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || errorMessage.includes("quota")) {
-        errorMessage = "API 請求次數已達上限 (Quota Exceeded)。請稍後再試，或在「系統設定」中更換您的自訂 Gemini API Key。";
-      } else if (errorMessage.includes("abort") || errorMessage.includes("AbortError")) {
-        errorMessage = "請求逾時或已中斷。請檢查網路連線後再試，若組合檔數較多可稍後再試。";
+    } catch (err: unknown) {
+      let errorMessage =
+        err instanceof Error ? err.message : "分析過程中發生錯誤。";
+      if (
+        errorMessage.includes("429") ||
+        errorMessage.includes("RESOURCE_EXHAUSTED") ||
+        errorMessage.includes("quota")
+      ) {
+        errorMessage =
+          "API 請求次數已達上限 (Quota Exceeded)。請稍後再試，或在「系統設定」中更換您的自訂 Gemini API Key。";
+      } else if (
+        errorMessage.includes("abort") ||
+        errorMessage.includes("AbortError")
+      ) {
+        errorMessage =
+          "請求逾時或已中斷。請檢查網路連線後再試，若組合檔數較多可稍後再試。";
       }
       setError(errorMessage);
     } finally {
@@ -158,13 +185,30 @@ export function AnalysisPage() {
         } catch (e) {}
       }
       
-      const position = currentPositions.find(p => p.ticker === ticker);
-      const strategy = localStorage.getItem('investmentStrategy') || 'growth';
-      
+      const position = currentPositions.find((p) => p.ticker === ticker);
+      const strategyRaw = localStorage.getItem("investmentStrategy") ?? "growth";
+      const strategy: InvestmentStrategy = isInvestmentStrategy(strategyRaw)
+        ? strategyRaw
+        : "growth";
+
       setAnalysisStatus("AI 正在同步生成儀表盤與報告...");
       const [dashboardData, fullReport] = await Promise.all([
-        generateSingleStockDashboard(ticker, data, tickerNews, marketContext, position, strategy as any),
-        generateSingleStockBrief(ticker, data, tickerNews, marketContext, position, strategy as any)
+        generateSingleStockDashboard(
+          ticker,
+          data,
+          tickerNews,
+          marketContext,
+          position,
+          strategy
+        ),
+        generateSingleStockBrief(
+          ticker,
+          data,
+          tickerNews,
+          marketContext,
+          position,
+          strategy
+        ),
       ]);
       
       dashboardData.full_report_markdown = fullReport;
@@ -188,11 +232,20 @@ export function AnalysisPage() {
       reports.unshift(newReport);
       localStorage.setItem('savedReports', JSON.stringify(reports));
 
-    } catch (err: any) {
-      let errorMessage = err.message || "分析過程中發生錯誤。";
-      if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || errorMessage.includes("quota")) {
-        errorMessage = "API 請求次數已達上限 (Quota Exceeded)。請稍後再試，或在「系統設定」中更換您的自訂 Gemini API Key。";
-      } else if (errorMessage.includes("abort") || errorMessage.includes("AbortError")) {
+    } catch (err: unknown) {
+      let errorMessage =
+        err instanceof Error ? err.message : "分析過程中發生錯誤。";
+      if (
+        errorMessage.includes("429") ||
+        errorMessage.includes("RESOURCE_EXHAUSTED") ||
+        errorMessage.includes("quota")
+      ) {
+        errorMessage =
+          "API 請求次數已達上限 (Quota Exceeded)。請稍後再試，或在「系統設定」中更換您的自訂 Gemini API Key。";
+      } else if (
+        errorMessage.includes("abort") ||
+        errorMessage.includes("AbortError")
+      ) {
         errorMessage = "請求逾時或已中斷。請檢查網路連線後再試。";
       }
       setSingleStockError(errorMessage);

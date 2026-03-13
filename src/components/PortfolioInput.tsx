@@ -30,11 +30,12 @@ export default function PortfolioInput({ onSave, isLoading, onTickersChange }: P
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const withIds = parsed.map((p: any, i: number) => ({
+          const positions = parsed as Position[];
+          const withIds = positions.map((p, i) => ({
             id: Date.now().toString() + i,
             ticker: p.ticker,
             shares: p.shares.toString(),
-            avgPrice: p.avgPrice.toString()
+            avgPrice: p.avgPrice.toString(),
           }));
           setUiPositions(withIds);
           setJsonInput(JSON.stringify(parsed, null, 2));
@@ -57,11 +58,11 @@ export default function PortfolioInput({ onSave, isLoading, onTickersChange }: P
           onTickersChange([]);
           return;
         }
-        const json = JSON.parse(jsonInput);
+        const json = JSON.parse(jsonInput) as unknown;
         if (Array.isArray(json)) {
-          const tickers = json
-            .map((item: any) => String(item.ticker || '').toUpperCase().trim())
-            .filter(t => t !== '');
+          const tickers = (json as Array<{ ticker?: unknown }>)
+            .map((item) => String(item.ticker ?? "").toUpperCase().trim())
+            .filter((t) => t !== "");
           onTickersChange(Array.from(new Set(tickers)));
         }
       }
@@ -112,14 +113,21 @@ export default function PortfolioInput({ onSave, isLoading, onTickersChange }: P
       if (!jsonInput.trim()) throw new Error("JSON 內容不能為空");
       const json = JSON.parse(jsonInput);
       if (!Array.isArray(json)) throw new Error("JSON 必須是一個陣列");
-      parsedPositions = json.map((item: any) => {
-        if (!item.ticker || item.shares === undefined || item.avg_price === undefined) {
+      interface JsonRow {
+        ticker?: unknown;
+        shares?: unknown;
+        avg_price?: unknown;
+        avgPrice?: unknown;
+      }
+      parsedPositions = (json as JsonRow[]).map((item) => {
+        const avgPrice = item.avg_price ?? item.avgPrice;
+        if (!item.ticker || item.shares === undefined || avgPrice === undefined) {
           throw new Error("JSON 項目必須包含 ticker, shares, 和 avg_price");
         }
         return {
           ticker: String(item.ticker).toUpperCase().trim(),
           shares: Number(item.shares),
-          avgPrice: Number(item.avg_price),
+          avgPrice: Number(avgPrice),
         };
       });
     } else {
@@ -158,8 +166,8 @@ export default function PortfolioInput({ onSave, isLoading, onTickersChange }: P
       onSave(parsedPositions);
       setIsSaved(true);
       setTimeout(() => setIsSaved(false), 3000);
-    } catch (err: any) {
-      setError(err.message || "解析輸入失敗");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "解析輸入失敗");
     }
   };
 

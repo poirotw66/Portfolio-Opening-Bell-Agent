@@ -1,5 +1,12 @@
 import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold, ThinkingLevel } from "@google/genai";
-import { PositionAnalytics, MarketContext, NewsItem, InvestmentStrategy, DecisionDashboard } from "../types";
+import {
+  PositionAnalytics,
+  MarketContext,
+  MarketData,
+  NewsItem,
+  InvestmentStrategy,
+  DecisionDashboard,
+} from "../types";
 
 const STRATEGY_LABELS: Record<InvestmentStrategy, string> = {
   value: '價值投資 (尋找被低估的股票)',
@@ -67,9 +74,9 @@ function sanitizeDashboardText(node: unknown): void {
  */
 export async function generateSingleStockDashboard(
   ticker: string,
-  marketData: any,
-  news: any[],
-  marketContext: any,
+  marketData: MarketData,
+  news: NewsItem[],
+  marketContext: MarketContext,
   userPosition?: { shares: number; avgPrice: number },
   strategy: InvestmentStrategy = 'growth'
 ): Promise<DecisionDashboard> {
@@ -433,9 +440,9 @@ ${pos.ticker} 的相關新聞:
 
 export async function generateSingleStockBrief(
   ticker: string,
-  marketData: any,
-  news: any[],
-  marketContext: any,
+  marketData: MarketData,
+  news: NewsItem[],
+  marketContext: MarketContext,
   userPosition?: { shares: number; avgPrice: number },
   strategy: InvestmentStrategy = 'growth'
 ): Promise<string> {
