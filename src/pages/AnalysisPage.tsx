@@ -84,6 +84,7 @@ export function AnalysisPage() {
         ? strategyRaw
         : "growth";
 
+      setAnalysisStatus("正在取得市場數據與新聞...");
       // Fetch all data in parallel
       const [marketData, news, marketContext] = await Promise.all([
         fetchMarketData(tickers),
@@ -93,6 +94,7 @@ export function AnalysisPage() {
 
       setNewsData(news);
 
+      setAnalysisStatus("正在整理投資組合部位...");
       // Calculate analytics
       const analytics: PositionAnalytics[] = currentPositions.map((pos) => {
         const data = marketData.find((m) => m.ticker === pos.ticker);
@@ -112,6 +114,7 @@ export function AnalysisPage() {
         };
       });
 
+      setAnalysisStatus("AI 正在生成投資組合開盤報告...");
       // Generate AI Report
       const aiReport = await generateOpeningBellBrief(
         analytics,
@@ -154,6 +157,7 @@ export function AnalysisPage() {
       setError(errorMessage);
     } finally {
       setIsLoading(false);
+      setAnalysisStatus("");
     }
   };
 
@@ -403,7 +407,9 @@ export function AnalysisPage() {
             {isLoading && (
               <div className="h-full min-h-[400px] flex flex-col items-center justify-center text-slate-500 bg-white rounded-2xl border border-slate-200 shadow-sm">
                 <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4" />
-                <p className="text-sm font-medium animate-pulse">正在收集市場情報...</p>
+                <p className="text-sm font-medium animate-pulse">
+                  {analysisStatus || "正在收集市場情報..."}
+                </p>
               </div>
             )}
 
