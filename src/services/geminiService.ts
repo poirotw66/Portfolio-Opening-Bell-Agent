@@ -10,20 +10,35 @@ const STRATEGY_LABELS: Record<InvestmentStrategy, string> = {
   dca: '定期定額 (固定投入分散成本)',
 };
 
+/** Max length per dashboard text field to avoid runaway output. */
+const DASHBOARD_FIELD_MAX_LENGTH = 200;
+
+/**
+ * Collapse consecutive repetition of any phrase (e.g. "數據不足，無法評估。" x N,
+ * "其韌性" x N, "其" x N) to a single occurrence. Runs multiple passes from longer
+ * to shorter pattern length so that "其韌性其韌性其" first becomes "其韌性其", then "其".
+ */
 function cleanRepetitiveSentences(text: string): string {
-  // Collapse pathological repetition of the special case sentence
   let cleaned = text.replace(
     /(數據不足，無法評估。)(\s*\1)+/g,
     '$1'
   );
 
-  // Optionally guard against extreme length
-  const maxLength = 200;
-  if (cleaned.length > maxLength) {
-    cleaned = cleaned.slice(0, maxLength);
+  // Collapse any substring that repeats 3+ times consecutively (pattern length 1..20)
+  let prev = '';
+  while (prev !== cleaned) {
+    prev = cleaned;
+    for (let len = 20; len >= 1; len--) {
+      const re = new RegExp(`(.{${len}})\\1{2,}`, 'g');
+      cleaned = cleaned.replace(re, '$1');
+    }
   }
 
-  return cleaned;
+  if (cleaned.length > DASHBOARD_FIELD_MAX_LENGTH) {
+    cleaned = cleaned.slice(0, DASHBOARD_FIELD_MAX_LENGTH);
+  }
+
+  return cleaned.trim();
 }
 
 function sanitizeDashboardText(node: unknown): void {
@@ -42,6 +57,14 @@ function sanitizeDashboardText(node: unknown): void {
   }
 }
 
+/**
+ * Generation flow for the single-stock decision dashboard (個人報告儀表板):
+ * 1. Load API key (custom or VITE_GEMINI_API_KEY) and model from localStorage.
+ * 2. Build a system instruction (trading rules, JSON rules, no repetition) + user prompt (ticker, market data, news, position).
+ * 3. Call Gemini with responseSchema so the model returns structured JSON (dashboard tree).
+ * 4. Parse JSON, fix escaped newlines in full_report_markdown, run sanitizeDashboardText to collapse repetitions, attach marketData/position, return.
+ * Failures: empty/undefined (e.g. RECITATION), JSON parse errors, or model loops in text fields — we mitigate loops in post-processing and with lower temperature.
+ */
 export async function generateSingleStockDashboard(
   ticker: string,
   marketData: any,
@@ -108,7 +131,7 @@ export async function generateSingleStockDashboard(
 3. 輸出格式必須為有效的決策儀表盤 JSON。
 4. 風險優先排查。
 5. **極度重要：所有 JSON 字串欄位必須只包含「一句話」，字數嚴格限制在 20-30 字以內，絕對不可重複生成多個結論。**
-6. **嚴禁循環重複：嚴禁在任何欄位中出現循環重複的字句。如果發現自己開始重複相同的詞彙或短語，請立即停止該欄位的生成並進入下一個欄位。**
+6. **嚴禁循環重複：嚴禁在任何欄位中出現循環重複的字、詞或短語（例如不可出現「其韌性其韌性…」或「其其其…」）。每個欄位寫完一句就停止，立即進入下一個欄位。**
 7. **禁止幻覺：若無數據支持，請回答「數據不足，無法評估」，不要編造數據或重複無意義的套話。**
 `;
 
@@ -162,10 +185,10 @@ ${news.length > 0 ? news.map((n, i) => `${i + 1}. ${n.title} (來源: ${n.publis
         { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
         { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
       ],
-      maxOutputTokens: 16384,
+      maxOutputTokens: 4096,
       thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-      temperature: 1.0,
-      topP: 0.95,
+      temperature: 0.6,
+      topP: 0.9,
       responseSchema: {
         type: Type.OBJECT,
         properties: {
@@ -282,6 +305,11 @@ ${news.length > 0 ? news.map((n, i) => `${i + 1}. ${n.title} (來源: ${n.publis
     console.log("AI Raw Response:", responseText);
 
     if (!responseText || responseText === "undefined") {
+      const candidates = (response as { candidates?: Array<{ finishReason?: string }> }).candidates;
+      const finishReason = candidates?.[0]?.finishReason;
+      if (finishReason === "RECITATION") {
+        throw new Error("Gemini 因內容政策阻擋了此次回應 (Recitation)，請稍後再試或更換股票/輸入。");
+      }
       console.error("AI returned invalid text:", responseText);
       console.log("Full Response Object:", JSON.stringify(response, null, 2));
       throw new Error("模型未返回有效內容 (Empty or Undefined)，請稍後再試。");
