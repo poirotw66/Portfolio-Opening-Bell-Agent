@@ -45,15 +45,14 @@ function PriceSparkline({ history, isUp }: { history: { date: string; close: num
   const minP = Math.min(...prices);
   const maxP = Math.max(...prices);
   const range = maxP - minP || 1;
-  const w = PDF_WIDTH - 64; // left+right padding inside the card
+  const chartW = PDF_WIDTH - 120; // Leave more space for Y-axis labels on the right
   const h = CHART_HEIGHT;
-  const pad = 8;
+  const pad = 10;
 
-  const toX = (i: number) => pad + (i / (prices.length - 1)) * (w - pad * 2);
+  const toX = (i: number) => pad + (i / (prices.length - 1)) * (chartW - pad * 2);
   const toY = (p: number) => h - pad - ((p - minP) / range) * (h - pad * 2);
 
   const polyPoints = prices.map((p, i) => `${toX(i)},${toY(p)}`).join(" ");
-  // closed fill path
   const fillPoints =
     `${toX(0)},${h - pad} ` + prices.map((p, i) => `${toX(i)},${toY(p)}`).join(" ") + ` ${toX(prices.length - 1)},${h - pad}`;
 
@@ -61,36 +60,61 @@ function PriceSparkline({ history, isUp }: { history: { date: string; close: num
   const fillId = `grad-${Math.random().toString(36).substr(2, 9)}`;
   const fillGradient = isUp ? ["rgba(16,185,129,0.2)", "rgba(16,185,129,0)"] : ["rgba(239,68,68,0.2)", "rgba(239,68,68,0)"];
 
-  // Y-axis labels
   const yLabels = [minP, (minP + maxP) / 2, maxP].map((v) => `$${v.toFixed(2)}`);
   const yPositions = [h - pad, h / 2, pad];
 
   return (
-    <svg width={w} height={h} style={{ display: "block", overflow: "visible" }}>
-      <defs>
-        <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={fillGradient[0]} />
-          <stop offset="100%" stopColor={fillGradient[1]} />
-        </linearGradient>
-      </defs>
-      {/* grid lines */}
-      {yPositions.map((y, i) => (
-        <line key={i} x1={pad} y1={y} x2={w - pad} y2={y} stroke="#f1f5f9" strokeWidth={1} />
-      ))}
-      {/* fill area */}
-      <polygon points={fillPoints} fill={`url(#${fillId})`} />
-      {/* price line */}
-      <polyline points={polyPoints} fill="none" stroke={stroke} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
-      {/* y-axis labels */}
-      {yLabels.map((label, i) => (
-        <text key={i} x={w - pad + 6} y={yPositions[i] + 3} fontSize={10} fill="#94a3b8" fontFamily="Inter, sans-serif">
-          {label}
+    <div style={{ marginTop: 10, paddingBottom: 20 }}>
+      <svg width={chartW + 60} height={h + 20} style={{ display: "block", overflow: "visible" }}>
+        <defs>
+          <linearGradient id={fillId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={fillGradient[0]} />
+            <stop offset="100%" stopColor={fillGradient[1]} />
+          </linearGradient>
+        </defs>
+        {/* grid lines */}
+        {yPositions.map((y, i) => (
+          <line key={i} x1={pad} y1={y} x2={chartW - pad} y2={y} stroke="#f1f5f9" strokeWidth={1} />
+        ))}
+        {/* fill area */}
+        <polygon points={fillPoints} fill={`url(#${fillId})`} />
+        {/* price line */}
+        <polyline points={polyPoints} fill="none" stroke={stroke} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+        {/* y-axis labels */}
+        {yLabels.map((label, i) => (
+          <text 
+            key={i} 
+            x={chartW - pad + 8} 
+            y={yPositions[i]} 
+            fontSize={10} 
+            fill="#94a3b8" 
+            style={{ fontFamily: "sans-serif", dominantBaseline: "middle" }}
+          >
+            {label}
+          </text>
+        ))}
+        {/* x-axis start / end dates */}
+        <text 
+          x={pad} 
+          y={h + 8} 
+          fontSize={10} 
+          fill="#94a3b8" 
+          style={{ fontFamily: "sans-serif", dominantBaseline: "hanging" }}
+        >
+          {history[0].date}
         </text>
-      ))}
-      {/* x-axis start / end dates */}
-      <text x={pad} y={h + 16} fontSize={10} fill="#94a3b8" fontFamily="Inter, sans-serif">{history[0].date}</text>
-      <text x={w - pad} y={h + 16} fontSize={10} fill="#94a3b8" fontFamily="Inter, sans-serif" textAnchor="end">{history[history.length - 1].date}</text>
-    </svg>
+        <text 
+          x={chartW - pad} 
+          y={h + 8} 
+          fontSize={10} 
+          fill="#94a3b8" 
+          textAnchor="end" 
+          style={{ fontFamily: "sans-serif", dominantBaseline: "hanging" }}
+        >
+          {history[history.length - 1].date}
+        </text>
+      </svg>
+    </div>
   );
 }
 
