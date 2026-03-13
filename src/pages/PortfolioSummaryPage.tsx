@@ -114,8 +114,8 @@ export function PortfolioSummaryPage() {
 
           <div className="flex flex-col md:flex-row items-center justify-center gap-8 md:gap-16 mb-10">
             {/* Chart Area */}
-            <div className="relative w-64 h-64 shrink-0">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="relative w-64 h-64 shrink-0 min-w-[12rem] min-h-[12rem]">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <PieChart>
                   <Pie
                     data={chartData}

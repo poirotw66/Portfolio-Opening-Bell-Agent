@@ -1,6 +1,6 @@
 import { MarketData, NewsItem, MarketContext } from "../types";
 
-async function fetchWithTimeout(resource: string, options: any = {}, timeout = 15000) {
+async function fetchWithTimeout(resource: string, options: any = {}, timeout = 30000) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
   try {

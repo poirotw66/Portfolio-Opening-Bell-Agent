@@ -88,8 +88,8 @@ export const DecisionDashboardDisplay: React.FC<Props> = ({ data }) => {
           </div>
 
           {data.marketData.history && data.marketData.history.length > 0 && (
-            <div className="mt-6 h-48 w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="mt-6 h-48 w-full min-h-[12rem]">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <LineChart data={data.marketData.history}>
                   <XAxis 
                     dataKey="date" 

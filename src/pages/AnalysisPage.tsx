@@ -113,6 +113,8 @@ export function AnalysisPage() {
       let errorMessage = err.message || "分析過程中發生錯誤。";
       if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || errorMessage.includes("quota")) {
         errorMessage = "API 請求次數已達上限 (Quota Exceeded)。請稍後再試，或在「系統設定」中更換您的自訂 Gemini API Key。";
+      } else if (errorMessage.includes("abort") || errorMessage.includes("AbortError")) {
+        errorMessage = "請求逾時或已中斷。請檢查網路連線後再試，若組合檔數較多可稍後再試。";
       }
       setError(errorMessage);
     } finally {
@@ -190,6 +192,8 @@ export function AnalysisPage() {
       let errorMessage = err.message || "分析過程中發生錯誤。";
       if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED") || errorMessage.includes("quota")) {
         errorMessage = "API 請求次數已達上限 (Quota Exceeded)。請稍後再試，或在「系統設定」中更換您的自訂 Gemini API Key。";
+      } else if (errorMessage.includes("abort") || errorMessage.includes("AbortError")) {
+        errorMessage = "請求逾時或已中斷。請檢查網路連線後再試。";
       }
       setSingleStockError(errorMessage);
     } finally {
