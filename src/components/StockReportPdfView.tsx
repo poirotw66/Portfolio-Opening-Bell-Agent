@@ -124,9 +124,17 @@ function TwoCol({ left, right }: { left: React.ReactNode; right: React.ReactNode
   );
 }
 
-function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+function Card({ children, style, accentColor }: { children: React.ReactNode; style?: React.CSSProperties; accentColor?: string }) {
   return (
-    <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 16, ...style }}>
+    <div style={{ 
+      background: "#f8fafc", 
+      border: "1px solid #e2e8f0", 
+      borderLeft: accentColor ? `4px solid ${accentColor}` : "1px solid #e2e8f0",
+      borderRadius: 10, 
+      padding: 16, 
+      boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+      ...style 
+    }}>
       {children}
     </div>
   );
@@ -244,35 +252,43 @@ export const StockReportPdfView: React.FC<Props> = ({ data, reportDate }) => {
       {/* ── Summary scores ── */}
       <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
         {/* sentiment score */}
-        <Card style={{ flex: 1, textAlign: "center" }}>
-          <div style={{ fontSize: 10, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>市場情緒評分</div>
+        <Card style={{ flex: 1, textAlign: "center" }} accentColor={data.sentiment_score >= 70 ? "#059669" : data.sentiment_score >= 40 ? "#d97706" : "#e11d48"}>
+          <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>市場情緒</div>
           <div style={{
-            fontSize: 40, fontWeight: 800,
+            fontSize: 42, fontWeight: 800,
             color: data.sentiment_score >= 70 ? "#059669" : data.sentiment_score >= 40 ? "#d97706" : "#e11d48",
+            lineHeight: 1,
+            margin: "4px 0"
           }}>
             {data.sentiment_score}
           </div>
-          <div style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>{data.trend_prediction}</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#475569", marginTop: 6 }}>{data.trend_prediction}</div>
         </Card>
 
         {/* operation advice */}
-        <Card style={{ flex: 1.8 }}>
-          <div style={{ fontSize: 10, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>核心操作建議</div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>{data.operation_advice}</div>
-          <div style={{ fontSize: 11, color: "#64748b" }}>信心水準：{data.confidence_level}</div>
+        <Card style={{ flex: 1.8 }} accentColor="#6366f1">
+          <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>核心建議</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "#1e1b4b", marginBottom: 6, lineHeight: 1.4 }}>{data.operation_advice}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 4, height: 4, borderRadius: "50%", background: "#6366f1" }}></div>
+            <div style={{ fontSize: 11, color: "#64748b", fontWeight: 500 }}>信心水準：<span style={{color: "#1e293b", fontWeight: 700}}>{data.confidence_level}</span></div>
+          </div>
         </Card>
 
         {/* one sentence */}
-        <Card style={{ flex: 2 }}>
-          <div style={{ fontSize: 10, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>一言以蔽之</div>
-          <div style={{ fontSize: 13, fontStyle: "italic", color: "#1e293b", lineHeight: 1.5 }}>
-            "{data.dashboard?.core_conclusion?.one_sentence || "—"}"
+        <Card style={{ flex: 2, background: "#f1f5f9" }}>
+          <div style={{ fontSize: 10, color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>關鍵總結</div>
+          <div style={{ position: "relative", paddingLeft: 12 }}>
+            <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 3, background: "#cbd5e1", borderRadius: 2 }}></div>
+            <div style={{ fontSize: 13, fontStyle: "italic", fontWeight: 500, color: "#334155", lineHeight: 1.6 }}>
+              "{data.dashboard?.core_conclusion?.one_sentence || "—"}"
+            </div>
           </div>
-          <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
-            <span style={{ fontSize: 9, padding: "2px 8px", background: "#f1f5f9", borderRadius: 99, color: "#64748b", textTransform: "uppercase" }}>
+          <div style={{ marginTop: 12, display: "flex", gap: 6 }}>
+            <span style={{ fontSize: 9, padding: "3px 10px", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 99, color: "#475569", fontWeight: 700, textTransform: "uppercase" }}>
               {data.dashboard?.core_conclusion?.signal_type || "—"}
             </span>
-            <span style={{ fontSize: 9, padding: "2px 8px", background: "#f1f5f9", borderRadius: 99, color: "#64748b", textTransform: "uppercase" }}>
+            <span style={{ fontSize: 9, padding: "3px 10px", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 99, color: "#475569", fontWeight: 700, textTransform: "uppercase" }}>
               {data.dashboard?.core_conclusion?.time_sensitivity || "—"}
             </span>
           </div>
@@ -324,32 +340,36 @@ export const StockReportPdfView: React.FC<Props> = ({ data, reportDate }) => {
       />
 
       {/* ── Battle plan ── */}
-      <div style={{ marginBottom: 20 }}>
+      <div style={{ marginBottom: 24 }}>
         <SectionTitle>🎯 實戰交易部署</SectionTitle>
         <div style={{ display: "flex", gap: 16 }}>
-          <Card style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 10 }}>狙擊進場位點</div>
+          <Card style={{ flex: 1 }} accentColor="#059669">
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>狙擊進場區間</div>
             <KVRow label="理想買入點" value={data.dashboard?.battle_plan?.sniper_points?.ideal_buy || "N/A"} valueColor="#059669" />
             <KVRow label="嚴格止損位" value={data.dashboard?.battle_plan?.sniper_points?.stop_loss || "N/A"} valueColor="#e11d48" />
             <KVRow label="目標獲利位" value={data.dashboard?.battle_plan?.sniper_points?.take_profit || "N/A"} />
           </Card>
-          <Card style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 10 }}>倉位管理策略</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginBottom: 6 }}>
+          <Card style={{ flex: 1 }} accentColor="#d97706">
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>倉位管理策略</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#1e293b", marginBottom: 8, lineHeight: 1.4 }}>
               {data.dashboard?.battle_plan?.position_strategy?.suggested_position || "N/A"}
             </div>
-            <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.5 }}>
+            <div style={{ fontSize: 11, color: "#475569", lineHeight: 1.6, padding: "8px", background: "#ffffff", borderRadius: 6, border: "1px dashed #e2e8f0" }}>
               {data.dashboard?.battle_plan?.position_strategy?.entry_plan || "N/A"}
             </div>
           </Card>
-          <Card style={{ flex: 1 }}>
-            <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 10 }}>行動執行清單</div>
-            {(data.dashboard?.battle_plan?.action_checklist || []).map((item, i) => (
-              <div key={i} style={{ fontSize: 11, color: "#374151", marginBottom: 5, display: "flex", gap: 6, alignItems: "flex-start" }}>
-                <span style={{ color: "#059669", fontWeight: 700, flexShrink: 0 }}>✓</span>
-                {item}
-              </div>
-            ))}
+          <Card style={{ flex: 1 }} accentColor="#6366f1">
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>行動執行清單</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {(data.dashboard?.battle_plan?.action_checklist || []).map((item, i) => (
+                <div key={i} style={{ fontSize: 11, color: "#334155", fontWeight: 500, display: "flex", gap: 8, alignItems: "flex-start" }}>
+                  <div style={{ width: 14, height: 14, borderRadius: 3, border: "1.5px solid #6366f1", flexShrink: 0, marginTop: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ width: 6, height: 6, borderRadius: 1, background: "#6366f1" }}></div>
+                  </div>
+                  {item}
+                </div>
+              ))}
+            </div>
           </Card>
         </div>
       </div>
