@@ -21,6 +21,14 @@ const STRATEGY_LABELS: Record<InvestmentStrategy, string> = {
 const DASHBOARD_FIELD_MAX_LENGTH = 200;
 const DASHBOARD_SUMMARY_MAX_LENGTH = 30;
 const DASHBOARD_TEXT_FALLBACK = "數據不足，無法評估";
+const SUMMARY_PROMPT_LEAKAGE_PATTERN =
+  /這是一句話結論|字數嚴格限制在三十字以內|限\s*30\s*字內|30\s*字內|禁止重複|只能輸出一個短句/u;
+const PLACEHOLDER_VALUE_PATTERN = /^(?:N\/A|NA|—|-|無|暫無動態|尚無結論)$/u;
+const NON_EMPTY_ARRAY_FIELD_PATHS = new Set([
+  "dashboard.intelligence.risk_alerts",
+  "dashboard.intelligence.positive_catalysts",
+  "dashboard.battle_plan.action_checklist",
+]);
 const SHORT_TEXT_FIELD_PATHS = new Set([
   "trend_prediction",
   "operation_advice",
@@ -120,6 +128,333 @@ function collapseToClauses(text: string, maxLength: number): string {
   }
 
   return conciseText;
+}
+
+interface DashboardValidationIssue {
+  path: string;
+  reason: "too_long" | "multiple_sentences" | "prompt_leakage" | "runaway_repetition" | "empty" | "placeholder" | "empty_array";
+  value: string;
+}
+
+function countSentenceTerminators(text: string): number {
+  return (text.match(/[。！？!?]/gu) ?? []).length;
+}
+
+function hasRunawayRepetition(text: string): boolean {
+  if (/(.{6,})\1{2,}/u.test(text)) {
+    return true;
+  }
+
+  const deduped = cleanRepetitiveSentences(text);
+  return text.length >= 80 && deduped.length <= text.length / 2;
+}
+
+function previewValidationValue(text: string): string {
+  return truncateCleanly(normalizePunctuationSpacing(text), 50);
+}
+
+function collectDashboardValidationIssues(
+  node: unknown,
+  path = "",
+  issues: DashboardValidationIssue[] = []
+): DashboardValidationIssue[] {
+  if (Array.isArray(node)) {
+    const normalizedPath = normalizePath(path);
+    if (NON_EMPTY_ARRAY_FIELD_PATHS.has(normalizedPath) && node.length === 0) {
+      issues.push({ path: normalizedPath, reason: "empty_array", value: "[]" });
+      return issues;
+    }
+
+    for (let index = 0; index < node.length; index += 1) {
+      collectDashboardValidationIssues(node[index], `${path}[${index}]`, issues);
+    }
+    return issues;
+  }
+
+  if (!node || typeof node !== "object") {
+    return issues;
+  }
+
+  const obj = node as Record<string, unknown>;
+  for (const key of Object.keys(obj)) {
+    const value = obj[key];
+    const currentPath = path ? `${path}.${key}` : key;
+    const normalizedPath = normalizePath(currentPath);
+
+    if (typeof value === "string" && SHORT_TEXT_FIELD_PATHS.has(normalizedPath)) {
+      const normalizedValue = normalizePunctuationSpacing(value);
+      const trimmedValue = stripPromptLeakage(normalizedValue);
+
+      if (!trimmedValue) {
+        issues.push({ path: normalizedPath, reason: "empty", value: value });
+        continue;
+      }
+
+      if (PLACEHOLDER_VALUE_PATTERN.test(trimmedValue)) {
+        issues.push({ path: normalizedPath, reason: "placeholder", value: value });
+      }
+
+      if (SUMMARY_PROMPT_LEAKAGE_PATTERN.test(value)) {
+        issues.push({ path: normalizedPath, reason: "prompt_leakage", value: value });
+      }
+
+      if (trimmedValue.length > DASHBOARD_SUMMARY_MAX_LENGTH) {
+        issues.push({ path: normalizedPath, reason: "too_long", value: trimmedValue });
+      }
+
+      if (/[\r\n]/u.test(value) || countSentenceTerminators(trimmedValue) > 1) {
+        issues.push({ path: normalizedPath, reason: "multiple_sentences", value: trimmedValue });
+      }
+
+      if (hasRunawayRepetition(value)) {
+        issues.push({ path: normalizedPath, reason: "runaway_repetition", value: value });
+      }
+
+      continue;
+    }
+
+    if (value && typeof value === "object") {
+      collectDashboardValidationIssues(value, currentPath, issues);
+    }
+  }
+
+  return issues;
+}
+
+function buildValidationFeedback(issues: DashboardValidationIssue[]): string {
+  if (issues.length === 0) {
+    return "";
+  }
+
+  const uniqueIssues = issues
+    .slice(0, 10)
+    .map((issue) => `- ${issue.path}: ${issue.reason} -> ${previewValidationValue(issue.value)}`);
+
+  return `
+
+上一次輸出失敗，請重做並修正以下欄位：
+${uniqueIssues.join("\n")}
+
+再次強調：
+- 上述欄位只能保留一個短句。
+- 每個短句不得超過 30 字。
+- 不得輸出任何提示詞、規則說明或字數提醒。
+- 不得在同一欄位連續生成第二句或長段落。
+`;
+}
+
+function buildSingleStockDashboardDraftPrompt(
+  ticker: string,
+  marketData: MarketData,
+  news: NewsItem[],
+  marketContext: MarketContext,
+  userPosition: { shares: number; avgPrice: number } | undefined,
+  strategy: InvestmentStrategy,
+): string {
+  return `你現在在做第一階段：產生單股決策儀表盤的結構化分析草稿。
+請針對股票「${ticker}」生成完整 JSON。
+使用者的投資策略是：${STRATEGY_LABELS[strategy] || strategy}。
+
+第一階段目標：
+- 重點是資訊完整、數值合理、欄位齊全、JSON 穩定。
+- 本階段先完成完整分析草稿，不必強求所有 UI 短句都很精煉。
+- 之後會由第二階段專門把短句欄位壓縮成 UI 文案。
+- 但你仍然必須填滿所有欄位，不可省略欄位，不可輸出空字串。
+
+欄位填值規範：
+- "confidence_level" 只能填「高」、「中」、「低」。
+- "dashboard.core_conclusion.signal_type" 只能填「買入」、「觀望」、「賣出」。
+- "dashboard.core_conclusion.time_sensitivity" 只能填「短期」、「中期」、「中長期」。
+- "dashboard.intelligence.latest_news" 必須摘要最重要事件；若近期新聞不足，填「近期新聞稀少，先觀察量價」。
+- "dashboard.intelligence.positive_catalysts" 與 "risk_alerts" 至少各填 1 項短句，不可空陣列。
+- "dashboard.battle_plan.action_checklist" 至少填 2 項可執行動作，不可空陣列。
+- "dashboard.battle_plan.sniper_points.ideal_buy"、"secondary_buy"、"stop_loss"、"take_profit" 必須填具體價格或價格區間，格式如 "$21.5-$22.0" 或 "$19.8"，不可填 "N/A"。
+- "dashboard.battle_plan.position_strategy.suggested_position"、"entry_plan"、"risk_control" 必須填完整短句，不可留空。
+- "dashboard.data_perspective.trend_status.trend_score" 必須填 0-100 的整數分數。
+- "dashboard.data_perspective.volume_analysis.volume_status" 必須填「縮量整理」、「量能中性」、「放量上攻」、「放量轉弱」等狀態，不可填 "N/A"。
+- "dashboard.data_perspective.price_position.support_level" 與 "resistance_level" 必須填數字；若缺少更多均線，可依現價與 SMA20 保守推估。
+
+數值推估原則：
+- 若只有 SMA20，支撐位可優先參考 SMA20 附近，壓力位可參考現價上方 3%-8% 區間。
+- 趨勢分數可綜合「現價相對 SMA20、RSI14、近月績效、新聞情緒」評估。
+- 量能狀態可根據當日成交量與價格漲跌描述，不得留白。
+
+正確示例：
+- trend_prediction: "短線回測支撐，中線趨勢未破"
+- operation_advice: "等待縮量止穩後再分批布局"
+- confidence_level: "中"
+- latest_news: "商業化進展仍是股價主軸"
+- ideal_buy: "$21.5-$22.0"
+
+請務必生成一份精簡的決策數據。
+
+包含以下區塊：
+1. 核心結論 (Core Conclusion)
+2. 數據透視 (Data Perspective)
+3. 市場情報 (Intelligence)
+4. 戰鬥計畫 (Battle Plan)
+
+以下是相關數據：
+
+--- 市場情境 ---
+NASDAQ (^IXIC): ${marketContext["^IXIC"]?.changePercent?.toFixed(2)}%
+S&P 500 (^GSPC): ${marketContext["^GSPC"]?.changePercent?.toFixed(2)}%
+
+--- 股票數據 (${ticker}) ---
+目前股價: $${marketData.price?.toFixed(2)}
+漲跌幅: ${marketData.changePercent?.toFixed(2)}%
+成交量: ${marketData.volume}
+市值: ${marketData.marketCap}
+${marketData.sma20 ? `20日均線 (SMA20): $${marketData.sma20.toFixed(2)}` : ""}
+${marketData.rsi14 ? `14日相對強弱指標 (RSI14): ${marketData.rsi14.toFixed(2)}` : ""}
+${marketData.oneMonthPerformance ? `近一個月歷史績效: ${marketData.oneMonthPerformance.toFixed(2)}%` : ""}
+
+--- 您的持股部位 ---
+${userPosition ? `股數: ${userPosition.shares}, 平均成本: $${userPosition.avgPrice.toFixed(2)}` : "目前未持有"}
+
+--- 最新新聞 ---
+${news.length > 0 ? news.map((n, i) => `${i + 1}. ${n.title} (來源: ${n.publisher}, 連結: ${n.link})`).join("\n") : "目前暫無新聞，請利用 Google Search 獲取最新動態。"}
+
+請嚴格按照規定的 JSON 結構輸出。`;
+}
+
+interface SingleStockDashboardUiFields {
+  trend_prediction: string;
+  operation_advice: string;
+  decision_type: "buy" | "hold" | "sell";
+  confidence_level: "高" | "中" | "低";
+  dashboard: {
+    core_conclusion: {
+      one_sentence: string;
+      signal_type: "買入" | "觀望" | "賣出";
+      time_sensitivity: "短期" | "中期" | "中長期";
+      position_advice: {
+        no_position: string;
+        has_position: string;
+      };
+    };
+    data_perspective: {
+      trend_status: {
+        ma_alignment: string;
+      };
+      price_position: {
+        bias_status: string;
+      };
+      volume_analysis: {
+        volume_status: string;
+        volume_meaning: string;
+      };
+      chip_structure: {
+        chip_health: string;
+      };
+    };
+    intelligence: {
+      latest_news: string;
+      risk_alerts: string[];
+      positive_catalysts: string[];
+      earnings_outlook: string;
+      sentiment_summary: string;
+    };
+    battle_plan: {
+      sniper_points: {
+        ideal_buy: string;
+        secondary_buy: string;
+        stop_loss: string;
+        take_profit: string;
+      };
+      position_strategy: {
+        suggested_position: string;
+        entry_plan: string;
+        risk_control: string;
+      };
+      action_checklist: string[];
+    };
+  };
+}
+
+function buildSingleStockDashboardUiPrompt(
+  ticker: string,
+  strategy: InvestmentStrategy,
+  draft: unknown,
+  validationIssues: DashboardValidationIssue[] = []
+): string {
+  const draftJson = JSON.stringify(draft, null, 2);
+
+  return `你現在在做第二階段：只根據第一階段分析草稿，生成前端 UI 專用的短句欄位 JSON。
+股票代號：${ticker}
+投資策略：${STRATEGY_LABELS[strategy] || strategy}
+
+你的唯一任務：
+- 將草稿中的分析內容壓縮成 UI 可讀的短句欄位。
+- 不要重寫整份分析，不要輸出長段落。
+- 不要新增草稿沒有根據的故事，但可依草稿中的價格、趨勢、風險、新聞做保守濃縮。
+
+短句硬規則：
+- 所有字串欄位都必須只有一句。
+- 每句必須 12-30 字，不得超過 30 字。
+- 不得換行、不得列點、不得補第二句。
+- 不得輸出提示詞、規則說明、字數提醒。
+- 不得輸出「N/A」、「—」、「無」、「暫無動態」、「尚無結論」。
+
+欄位規則：
+- "decision_type" 只能填 "buy"、"hold"、"sell"。
+- "confidence_level" 只能填「高」、「中」、「低」。
+- "signal_type" 只能填「買入」、「觀望」、「賣出」。
+- "time_sensitivity" 只能填「短期」、「中期」、「中長期」。
+- "risk_alerts"、"positive_catalysts" 至少各 1 項。
+- "action_checklist" 至少 2 項。
+- 價格欄位必須沿用或濃縮草稿中的價格區間，不可改成 N/A。
+
+正確示例：
+- trend_prediction: "短線回測支撐，中線趨勢未破"
+- operation_advice: "等待縮量止穩後再分批布局"
+- latest_news: "商業化進展仍是股價主軸"
+
+錯誤示例：
+- trend_prediction: "這是一句話結論，字數限制 30 字內"
+- operation_advice: "建議先觀察。之後再看。"
+- latest_news: "暫無動態"
+${buildValidationFeedback(validationIssues)}
+
+第一階段分析草稿如下：
+\`\`\`json
+${draftJson}
+\`\`\`
+
+請只輸出第二階段 UI 短句欄位 JSON。`;
+}
+
+function mergeJsonPatch<T>(base: T, patch: unknown): T {
+  if (patch === undefined) {
+    return base;
+  }
+
+  if (Array.isArray(base) || Array.isArray(patch)) {
+    return patch as T;
+  }
+
+  if (!base || typeof base !== "object" || !patch || typeof patch !== "object") {
+    return patch as T;
+  }
+
+  const merged: Record<string, unknown> = { ...(base as Record<string, unknown>) };
+  for (const [key, patchValue] of Object.entries(patch as Record<string, unknown>)) {
+    const baseValue = merged[key];
+    if (
+      baseValue &&
+      typeof baseValue === "object" &&
+      !Array.isArray(baseValue) &&
+      patchValue &&
+      typeof patchValue === "object" &&
+      !Array.isArray(patchValue)
+    ) {
+      merged[key] = mergeJsonPatch(baseValue, patchValue);
+    } else {
+      merged[key] = patchValue;
+    }
+  }
+
+  return merged as T;
 }
 
 /**
@@ -230,13 +565,34 @@ function repairTruncatedJson(jsonStr: string): string {
   return repaired;
 }
 
+function parseJsonResponse(responseText: string): ReturnType<typeof JSON.parse> {
+  let cleanJson = responseText.trim();
+  if (cleanJson.startsWith("```")) {
+    cleanJson = cleanJson.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+  }
+
+  try {
+    return JSON.parse(cleanJson);
+  } catch (parseErr) {
+    const isUnterminated =
+      parseErr instanceof SyntaxError &&
+      (parseErr.message.includes("Unterminated") || parseErr.message.includes("Unexpected end"));
+    if (isUnterminated) {
+      console.warn("JSON truncated, attempting repair...");
+      return JSON.parse(repairTruncatedJson(cleanJson));
+    }
+    throw parseErr;
+  }
+}
+
 /**
  * Generation flow for the single-stock decision dashboard (個人報告儀表板):
  * 1. Load API key (custom or VITE_GEMINI_API_KEY) and model from localStorage.
- * 2. Build a system instruction (trading rules, JSON rules, no repetition) + user prompt (ticker, market data, news, position).
- * 3. Call Gemini with responseSchema so the model returns structured JSON (dashboard tree).
- * 4. Parse JSON, fix escaped newlines in full_report_markdown, run sanitizeDashboardText to collapse repetitions, attach marketData/position, return.
- * Failures: empty/undefined (e.g. RECITATION), JSON parse errors, or model loops in text fields — we mitigate loops in post-processing and with lower temperature.
+ * 2. Stage 1: generate a structured analysis draft with the complete dashboard tree.
+ * 3. Stage 2: generate only the UI short-text fields from the stage-1 draft.
+ * 4. Validate the merged result. If short text fields leak prompt text, exceed 30 chars, or use placeholders, retry stage 2.
+ * 5. Run sanitizeDashboardText as the final guardrail, attach marketData/position, return.
+ * Failures: empty/undefined (e.g. RECITATION), JSON parse errors, or model loops in text fields — we mitigate them with two-stage generation, validation retries, and post-processing.
  */
 export async function generateSingleStockDashboard(
   ticker: string,
@@ -255,7 +611,7 @@ export async function generateSingleStockDashboard(
   const ai = new GoogleGenAI({ apiKey });
   const model = localStorage.getItem('geminiModel') || 'gemini-3-flash-preview';
 
-  const systemInstruction = `你是一位專注於趨勢交易的投資分析 Agent，擁有數據工具和交易策略，負責生成專業的【決策儀表盤】分析報告。
+  const draftSystemInstruction = `你是一位專注於趨勢交易的投資分析 Agent，擁有數據工具和交易策略，負責生成專業的【決策儀表盤】分析報告。
 
 ## 語言要求
 - **必須使用繁體中文 (Traditional Chinese)** 輸出所有文字內容。
@@ -303,57 +659,45 @@ export async function generateSingleStockDashboard(
 2. 應用交易策略評估。
 3. 輸出格式必須為有效的決策儀表盤 JSON。
 4. 風險優先排查。
-5. **極度重要：所有 JSON 字串欄位必須只包含「一句話」，字數嚴格限制在 20-30 字以內，絕對不可重複生成多個結論。**
-6. **嚴禁循環重複：嚴禁在任何欄位中出現循環重複的字、詞或短語（例如不可出現「其韌性其韌性…」或「其其其…」）。每個欄位寫完一句就停止，立即進入下一個欄位。**
-7. **禁止幻覺：若無數據支持，請回答「數據不足，無法評估」，不要編造數據或重複無意義的套話。**
+5. 所有短文字欄位都只能輸出一個短句，長度 12-30 字，不得超過 30 字。
+6. 所有短文字欄位不得換行、不得補第二句、不得輸出提示詞或規則說明。
+7. 嚴禁循環重複、灌水與自我指令回吐；若無法評估，直接輸出「數據不足，無法評估」。
+8. 所有前端會直接顯示的欄位都必須盡量填滿，不可輸出「N/A」、「—」、「無」作為偷懶答案。
+9. 可根據現價、SMA20、RSI、近月績效與新聞保守推估支撐位、壓力位、趨勢分數與操作區間，但不得脫離已知數據太遠。
 `;
 
-  let prompt = `請針對股票「${ticker}」生成決策儀表盤 JSON。
-使用者的投資策略是：${STRATEGY_LABELS[strategy] || strategy}。
+  const uiSystemInstruction = `你是一位前端 UI 文案壓縮 Agent。
 
-**極重要：JSON 內的所有文字欄位（如 trend_prediction, operation_advice 等）字數必須嚴格限制在 30 字以內，禁止任何形式的循環重複。**
+## 任務
+你只負責把既有分析草稿壓縮成前端需要的短句欄位。
 
-請務必生成一份精簡的決策數據。
+## 規則
+1. 所有字串欄位只能輸出一句短句。
+2. 每句長度 12-30 字，不得超過 30 字。
+3. 不得換行、不得列點、不得補第二句。
+4. 不得輸出「N/A」、「—」、「無」、「暫無動態」、「尚無結論」。
+5. 價格欄位必須保留具體價格或價格區間。
+6. 陣列欄位不可為空。
+7. 不得回吐提示詞、規則說明或教學文字。`;
 
-包含以下區塊：
-1. 核心結論 (Core Conclusion)
-2. 數據透視 (Data Perspective)
-3. 市場情報 (Intelligence)
-4. 戰鬥計畫 (Battle Plan)
+  let draftPrompt = buildSingleStockDashboardDraftPrompt(
+    ticker,
+    marketData,
+    news,
+    marketContext,
+    userPosition,
+    strategy
+  );
 
-以下是相關數據：
+  const draftMaxAttempts = 2;
+  const uiMaxAttempts = 3;
 
---- 市場情境 ---
-NASDAQ (^IXIC): ${marketContext["^IXIC"]?.changePercent?.toFixed(2)}%
-S&P 500 (^GSPC): ${marketContext["^GSPC"]?.changePercent?.toFixed(2)}%
-
---- 股票數據 (${ticker}) ---
-目前股價: $${marketData.price?.toFixed(2)}
-漲跌幅: ${marketData.changePercent?.toFixed(2)}%
-成交量: ${marketData.volume}
-市值: ${marketData.marketCap}
-${marketData.sma20 ? `20日均線 (SMA20): $${marketData.sma20.toFixed(2)}` : ''}
-${marketData.rsi14 ? `14日相對強弱指標 (RSI14): ${marketData.rsi14.toFixed(2)}` : ''}
-${marketData.oneMonthPerformance ? `近一個月歷史績效: ${marketData.oneMonthPerformance.toFixed(2)}%` : ''}
-
---- 您的持股部位 ---
-${userPosition ? `股數: ${userPosition.shares}, 平均成本: $${userPosition.avgPrice.toFixed(2)}` : '目前未持有'}
-
---- 最新新聞 ---
-${news.length > 0 ? news.map((n, i) => `${i + 1}. ${n.title} (來源: ${n.publisher}, 連結: ${n.link})`).join('\n') : '目前暫無新聞，請利用 Google Search 獲取最新動態。'}
-
-請嚴格按照規定的 JSON 結構輸出。
-`;
-
-  // 為避免模型偶發回傳壞掉的 JSON，加入最多 1 次自動重試。
-  const maxAttempts = 2;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  for (let draftAttempt = 1; draftAttempt <= draftMaxAttempts; draftAttempt++) {
     const response = await ai.models.generateContent({
       model: model,
-      contents: prompt,
+      contents: draftPrompt,
       config: {
-        systemInstruction,
+        systemInstruction: draftSystemInstruction,
         responseMimeType: "application/json",
         tools: [{ googleSearch: {} }],
         safetySettings: [
@@ -362,33 +706,33 @@ ${news.length > 0 ? news.map((n, i) => `${i + 1}. ${n.title} (來源: ${n.publis
           { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
           { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
         ],
-        maxOutputTokens: 4096,
+        maxOutputTokens: 2300,
         thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-        temperature: 0.4,
-        topP: 0.9,
+        temperature: 0.2,
+        topP: 0.8,
         responseSchema: {
           type: Type.OBJECT,
           properties: {
             stock_name: { type: Type.STRING },
             sentiment_score: { type: Type.NUMBER },
-            trend_prediction: { type: Type.STRING, description: "一句話趨勢預測，限 30 字內，禁止重複" },
-            operation_advice: { type: Type.STRING, description: "一句話操作建議，限 30 字內，禁止重複" },
+            trend_prediction: { type: Type.STRING, description: "一句話趨勢預測，限 30 字內，禁止重複，不可輸出 N/A" },
+            operation_advice: { type: Type.STRING, description: "一句話操作建議，限 30 字內，禁止重複，不可輸出 N/A" },
             decision_type: { type: Type.STRING, enum: ["buy", "hold", "sell"] },
-            confidence_level: { type: Type.STRING },
+            confidence_level: { type: Type.STRING, enum: ["高", "中", "低"] },
             dashboard: {
               type: Type.OBJECT,
               properties: {
                 core_conclusion: {
                   type: Type.OBJECT,
                   properties: {
-                    one_sentence: { type: Type.STRING, description: "一句話核心結論" },
-                    signal_type: { type: Type.STRING, description: "如：買入、觀望" },
-                    time_sensitivity: { type: Type.STRING, description: "如：短期、中期" },
+                    one_sentence: { type: Type.STRING, description: "一句話核心結論，限 30 字內，不可空白" },
+                    signal_type: { type: Type.STRING, enum: ["買入", "觀望", "賣出"] },
+                    time_sensitivity: { type: Type.STRING, enum: ["短期", "中期", "中長期"] },
                     position_advice: {
                       type: Type.OBJECT,
                       properties: {
-                        no_position: { type: Type.STRING, description: "空倉建議" },
-                        has_position: { type: Type.STRING, description: "持倉建議" }
+                        no_position: { type: Type.STRING, description: "空倉建議，一句話，限 30 字內，不可 N/A" },
+                        has_position: { type: Type.STRING, description: "持倉建議，一句話，限 30 字內，不可 N/A" }
                       }
                     }
                   }
@@ -399,9 +743,9 @@ ${news.length > 0 ? news.map((n, i) => `${i + 1}. ${n.title} (來源: ${n.publis
                     trend_status: {
                       type: Type.OBJECT,
                       properties: {
-                        ma_alignment: { type: Type.STRING, description: "如：多頭排列" },
+                        ma_alignment: { type: Type.STRING, description: "如：多頭排列、價在 MA20 之上，不可空白" },
                         is_bullish: { type: Type.BOOLEAN },
-                        trend_score: { type: Type.NUMBER }
+                        trend_score: { type: Type.NUMBER, description: "0 到 100 的趨勢強度分數" }
                       }
                     },
                     price_position: {
@@ -412,18 +756,18 @@ ${news.length > 0 ? news.map((n, i) => `${i + 1}. ${n.title} (來源: ${n.publis
                         ma10: { type: Type.NUMBER },
                         ma20: { type: Type.NUMBER },
                         bias_ma5: { type: Type.NUMBER },
-                        bias_status: { type: Type.STRING },
-                        support_level: { type: Type.NUMBER },
-                        resistance_level: { type: Type.NUMBER }
+                        bias_status: { type: Type.STRING, description: "如：偏高、合理、偏低，不可空白" },
+                        support_level: { type: Type.NUMBER, description: "必填的關鍵支撐價位，不可留空" },
+                        resistance_level: { type: Type.NUMBER, description: "必填的關鍵壓力價位，不可留空" }
                       }
                     },
                     volume_analysis: {
                       type: Type.OBJECT,
                       properties: {
                         volume_ratio: { type: Type.NUMBER },
-                        volume_status: { type: Type.STRING, description: "如：縮量、放量" },
+                        volume_status: { type: Type.STRING, description: "如：縮量整理、量能中性、放量上攻，不可填 N/A" },
                         turnover_rate: { type: Type.NUMBER },
-                        volume_meaning: { type: Type.STRING, description: "一句話解釋成交量意義" }
+                        volume_meaning: { type: Type.STRING, description: "一句話解釋成交量意義，限 30 字內，不可空白" }
                       }
                     },
                     chip_structure: {
@@ -432,7 +776,7 @@ ${news.length > 0 ? news.map((n, i) => `${i + 1}. ${n.title} (來源: ${n.publis
                         profit_ratio: { type: Type.NUMBER },
                         avg_cost: { type: Type.NUMBER },
                         concentration: { type: Type.NUMBER },
-                        chip_health: { type: Type.STRING }
+                        chip_health: { type: Type.STRING, description: "一句話描述籌碼健康度，限 30 字內，不可空白" }
                       }
                     }
                   }
@@ -440,11 +784,11 @@ ${news.length > 0 ? news.map((n, i) => `${i + 1}. ${n.title} (來源: ${n.publis
                 intelligence: {
                   type: Type.OBJECT,
                   properties: {
-                    latest_news: { type: Type.STRING },
-                    risk_alerts: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    positive_catalysts: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    earnings_outlook: { type: Type.STRING },
-                    sentiment_summary: { type: Type.STRING }
+                    latest_news: { type: Type.STRING, description: "一句話最新市場動態，不可填暫無動態，若新聞少請寫近期新聞稀少，先觀察量價" },
+                    risk_alerts: { type: Type.ARRAY, items: { type: Type.STRING, description: "一句話風險警示，限 30 字內" } },
+                    positive_catalysts: { type: Type.ARRAY, items: { type: Type.STRING, description: "一句話利多催化，限 30 字內" } },
+                    earnings_outlook: { type: Type.STRING, description: "一句話業績展望，限 30 字內，不可空白" },
+                    sentiment_summary: { type: Type.STRING, description: "一句話市場情緒總結，限 30 字內，不可空白" }
                   }
                 },
                 battle_plan: {
@@ -453,21 +797,21 @@ ${news.length > 0 ? news.map((n, i) => `${i + 1}. ${n.title} (來源: ${n.publis
                     sniper_points: {
                       type: Type.OBJECT,
                       properties: {
-                        ideal_buy: { type: Type.STRING },
-                        secondary_buy: { type: Type.STRING },
-                        stop_loss: { type: Type.STRING },
-                        take_profit: { type: Type.STRING }
+                        ideal_buy: { type: Type.STRING, description: "必填具體買入價格或區間，例如 $21.5-$22.0" },
+                        secondary_buy: { type: Type.STRING, description: "必填次要買入價格或區間，例如 $20.8-$21.2" },
+                        stop_loss: { type: Type.STRING, description: "必填明確止損價位，例如 $19.8" },
+                        take_profit: { type: Type.STRING, description: "必填明確目標價位，例如 $24.5" }
                       }
                     },
                     position_strategy: {
                       type: Type.OBJECT,
                       properties: {
-                        suggested_position: { type: Type.STRING },
-                        entry_plan: { type: Type.STRING },
-                        risk_control: { type: Type.STRING }
+                        suggested_position: { type: Type.STRING, description: "一句話倉位建議，限 30 字內，不可空白" },
+                        entry_plan: { type: Type.STRING, description: "一句話進場策略，限 30 字內，不可空白" },
+                        risk_control: { type: Type.STRING, description: "一句話風控策略，限 30 字內，不可空白" }
                       }
                     },
-                    action_checklist: { type: Type.ARRAY, items: { type: Type.STRING } }
+                    action_checklist: { type: Type.ARRAY, items: { type: Type.STRING, description: "一句話執行動作，限 30 字內" } }
                   }
                 }
               }
@@ -492,43 +836,160 @@ ${news.length > 0 ? news.map((n, i) => `${i + 1}. ${n.title} (來源: ${n.publis
         throw new Error("模型未返回有效內容 (Empty or Undefined)，請稍後再試。");
       }
 
-      // Clean markdown code blocks if the model accidentally included them
-      let cleanJson = responseText.trim();
-      if (cleanJson.startsWith("```")) {
-        cleanJson = cleanJson.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-      }
+      const draft = parseJsonResponse(responseText) as DecisionDashboard;
 
-      // Attempt to parse; if it fails due to truncation, try repairing first.
-      let parsed: ReturnType<typeof JSON.parse>;
-      try {
-        parsed = JSON.parse(cleanJson);
-      } catch (parseErr) {
-        const isUnterminated =
-          parseErr instanceof SyntaxError &&
-          (parseErr.message.includes("Unterminated") || parseErr.message.includes("Unexpected end"));
-        if (isUnterminated) {
-          console.warn("JSON truncated, attempting repair...");
-          parsed = JSON.parse(repairTruncatedJson(cleanJson));
-        } else {
-          throw parseErr;
+      let uiPrompt = buildSingleStockDashboardUiPrompt(
+        ticker,
+        strategy,
+        draft
+      );
+
+      for (let uiAttempt = 1; uiAttempt <= uiMaxAttempts; uiAttempt++) {
+        const uiResponse = await ai.models.generateContent({
+          model: model,
+          contents: uiPrompt,
+          config: {
+            systemInstruction: uiSystemInstruction,
+            responseMimeType: "application/json",
+            maxOutputTokens: 1200,
+            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+            temperature: 0.1,
+            topP: 0.5,
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                trend_prediction: { type: Type.STRING },
+                operation_advice: { type: Type.STRING },
+                decision_type: { type: Type.STRING, enum: ["buy", "hold", "sell"] },
+                confidence_level: { type: Type.STRING, enum: ["高", "中", "低"] },
+                dashboard: {
+                  type: Type.OBJECT,
+                  properties: {
+                    core_conclusion: {
+                      type: Type.OBJECT,
+                      properties: {
+                        one_sentence: { type: Type.STRING },
+                        signal_type: { type: Type.STRING, enum: ["買入", "觀望", "賣出"] },
+                        time_sensitivity: { type: Type.STRING, enum: ["短期", "中期", "中長期"] },
+                        position_advice: {
+                          type: Type.OBJECT,
+                          properties: {
+                            no_position: { type: Type.STRING },
+                            has_position: { type: Type.STRING }
+                          }
+                        }
+                      }
+                    },
+                    data_perspective: {
+                      type: Type.OBJECT,
+                      properties: {
+                        trend_status: {
+                          type: Type.OBJECT,
+                          properties: {
+                            ma_alignment: { type: Type.STRING }
+                          }
+                        },
+                        price_position: {
+                          type: Type.OBJECT,
+                          properties: {
+                            bias_status: { type: Type.STRING }
+                          }
+                        },
+                        volume_analysis: {
+                          type: Type.OBJECT,
+                          properties: {
+                            volume_status: { type: Type.STRING },
+                            volume_meaning: { type: Type.STRING }
+                          }
+                        },
+                        chip_structure: {
+                          type: Type.OBJECT,
+                          properties: {
+                            chip_health: { type: Type.STRING }
+                          }
+                        }
+                      }
+                    },
+                    intelligence: {
+                      type: Type.OBJECT,
+                      properties: {
+                        latest_news: { type: Type.STRING },
+                        risk_alerts: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        positive_catalysts: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        earnings_outlook: { type: Type.STRING },
+                        sentiment_summary: { type: Type.STRING }
+                      }
+                    },
+                    battle_plan: {
+                      type: Type.OBJECT,
+                      properties: {
+                        sniper_points: {
+                          type: Type.OBJECT,
+                          properties: {
+                            ideal_buy: { type: Type.STRING },
+                            secondary_buy: { type: Type.STRING },
+                            stop_loss: { type: Type.STRING },
+                            take_profit: { type: Type.STRING }
+                          }
+                        },
+                        position_strategy: {
+                          type: Type.OBJECT,
+                          properties: {
+                            suggested_position: { type: Type.STRING },
+                            entry_plan: { type: Type.STRING },
+                            risk_control: { type: Type.STRING }
+                          }
+                        },
+                        action_checklist: { type: Type.ARRAY, items: { type: Type.STRING } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+        });
+
+        const uiResponseText = uiResponse.text;
+        if (!uiResponseText || uiResponseText === "undefined") {
+          throw new Error("第二階段模型未返回有效內容，請稍後再試。");
         }
-      }
-      // Fix escaped newlines if they appear as literal \n or \r\n in the string
-      if (parsed.full_report_markdown && typeof parsed.full_report_markdown === 'string') {
-        parsed.full_report_markdown = parsed.full_report_markdown
-          .replace(/\\n/g, '\n')
-          .replace(/\\r/g, '\r')
-          .replace(/([^\n])\s*#\s/g, '$1\n\n# ');
-      }
 
-      // Clean up any pathological repetitions inside dashboard text fields
-      sanitizeDashboardText(parsed);
-      
-      // Attach raw data for UI display
-      parsed.marketData = marketData;
-      parsed.position = userPosition;
-      
-      return parsed;
+        const uiFields = parseJsonResponse(uiResponseText) as SingleStockDashboardUiFields;
+        const merged = mergeJsonPatch(draft, uiFields);
+        const validationIssues = collectDashboardValidationIssues(merged);
+        if (validationIssues.length > 0) {
+          console.warn("Dashboard UI short-text validation failed:", validationIssues);
+          if (uiAttempt < uiMaxAttempts) {
+            uiPrompt = buildSingleStockDashboardUiPrompt(
+              ticker,
+              strategy,
+              draft,
+              validationIssues
+            );
+            continue;
+          }
+
+          if (draftAttempt < draftMaxAttempts) {
+            draftPrompt = buildSingleStockDashboardDraftPrompt(
+              ticker,
+              marketData,
+              news,
+              marketContext,
+              userPosition,
+              strategy
+            );
+            break;
+          }
+        }
+
+        sanitizeDashboardText(merged);
+        merged.marketData = marketData;
+        merged.position = userPosition
+          ? { ticker, shares: userPosition.shares, avgPrice: userPosition.avgPrice }
+          : undefined;
+        return merged;
+      }
     } catch (e) {
       const isSyntaxError =
         e instanceof SyntaxError ||
@@ -539,10 +1000,8 @@ ${news.length > 0 ? news.map((n, i) => `${i + 1}. ${n.title} (來源: ${n.publis
 
       console.error("JSON parse error:", e);
 
-      if (isSyntaxError && attempt < maxAttempts) {
-        // 自動重試一次，避免偶發壞 JSON 直接中斷使用者流程。
-        // eslint-disable-next-line no-console
-        console.warn("JSON 解析失敗，正在自動重試一次 generateSingleStockDashboard...");
+      if (isSyntaxError && draftAttempt < draftMaxAttempts) {
+        console.warn("第一階段 JSON 解析失敗，正在重試 generateSingleStockDashboard...");
         continue;
       }
 

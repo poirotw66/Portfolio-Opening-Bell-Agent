@@ -53,6 +53,7 @@ function getResolvedDataPerspective(data: DecisionDashboard) {
 
 export const DecisionDashboardDisplay: React.FC<Props> = ({ data }) => {
   const resolved = getResolvedDataPerspective(data);
+  const technicalDataHint = data.marketData?.technicalDataError || "技術指標資料暫缺";
 
   const getDecisionColor = (type: string) => {
     switch (type) {
@@ -117,16 +118,22 @@ export const DecisionDashboardDisplay: React.FC<Props> = ({ data }) => {
           >
             <div>
               <div className="text-xs text-zinc-500 mb-1">SMA 20</div>
-              <div className="text-sm text-white font-medium">${data.marketData.sma20?.toFixed(2) || 'N/A'}</div>
+              <div className="text-sm text-white font-medium">
+                {data.marketData.sma20 != null ? `$${data.marketData.sma20.toFixed(2)}` : technicalDataHint}
+              </div>
             </div>
             <div>
               <div className="text-xs text-zinc-500 mb-1">RSI 14</div>
-              <div className="text-sm text-white font-medium">{data.marketData.rsi14?.toFixed(2) || 'N/A'}</div>
+              <div className="text-sm text-white font-medium">
+                {data.marketData.rsi14 != null ? data.marketData.rsi14.toFixed(2) : technicalDataHint}
+              </div>
             </div>
             <div>
               <div className="text-xs text-zinc-500 mb-1">近一月</div>
-              <div className={`text-sm font-medium ${data.marketData.oneMonthPerformance && data.marketData.oneMonthPerformance >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                {data.marketData.oneMonthPerformance ? `${data.marketData.oneMonthPerformance > 0 ? '+' : ''}${data.marketData.oneMonthPerformance.toFixed(2)}%` : 'N/A'}
+              <div className={`text-sm font-medium ${data.marketData.oneMonthPerformance == null ? 'text-zinc-400' : data.marketData.oneMonthPerformance >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                {data.marketData.oneMonthPerformance != null
+                  ? `${data.marketData.oneMonthPerformance > 0 ? '+' : ''}${data.marketData.oneMonthPerformance.toFixed(2)}%`
+                  : technicalDataHint}
               </div>
             </div>
           </div>

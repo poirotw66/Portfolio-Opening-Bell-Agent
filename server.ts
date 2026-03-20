@@ -88,6 +88,7 @@ async function startServer() {
           let rsi14: number | null = null;
           let oneMonthPerformance: number | null = null;
           let history: { date: string; close: number }[] = [];
+          let technicalDataError: string | undefined;
 
           try {
             const endDate = new Date();
@@ -120,9 +121,16 @@ async function startServer() {
                 const priceOneMonthAgo = closePrices[closePrices.length - 21];
                 oneMonthPerformance = ((currentPrice - priceOneMonthAgo) / priceOneMonthAgo) * 100;
               }
+
+              if (closePrices.length < 20) {
+                technicalDataError = "歷史資料不足，無法完整計算技術指標";
+              }
+            } else {
+              technicalDataError = "查無足夠歷史行情資料";
             }
           } catch (histErr) {
             console.error(`Error fetching historical data for ${ticker}:`, histErr);
+            technicalDataError = "歷史行情抓取失敗";
           }
 
           results.push({
@@ -135,7 +143,8 @@ async function startServer() {
             sma20,
             rsi14,
             oneMonthPerformance,
-            history
+            history,
+            technicalDataError
           });
         } catch (err) {
           console.error(`Error fetching quote for ${ticker}:`, err);

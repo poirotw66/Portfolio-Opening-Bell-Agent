@@ -171,6 +171,7 @@ export const StockReportPdfView: React.FC<Props> = ({ data, reportDate }) => {
   const isUp = md ? md.change >= 0 : true;
   const decisionColor = buildDecisionColor(data.decision_type);
   const decisionBg = buildDecisionBg(data.decision_type);
+  const technicalDataHint = md?.technicalDataError || "技術指標資料暫缺";
 
   const biasMa20 =
     md?.sma20 != null && md.price != null && md.sma20 > 0
@@ -237,16 +238,20 @@ export const StockReportPdfView: React.FC<Props> = ({ data, reportDate }) => {
             <div style={{ display: "flex", gap: 24, textAlign: "right" }}>
               <div>
                 <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 2 }}>SMA 20</div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>${md.sma20?.toFixed(2) || "N/A"}</div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>
+                  {md.sma20 != null ? `$${md.sma20.toFixed(2)}` : technicalDataHint}
+                </div>
               </div>
               <div>
                 <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 2 }}>RSI 14</div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{md.rsi14?.toFixed(2) || "N/A"}</div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>
+                  {md.rsi14 != null ? md.rsi14.toFixed(2) : technicalDataHint}
+                </div>
               </div>
               <div>
                 <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 2 }}>近一月</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: (md.oneMonthPerformance ?? 0) >= 0 ? "#059669" : "#e11d48" }}>
-                  {md.oneMonthPerformance != null ? `${md.oneMonthPerformance > 0 ? "+" : ""}${md.oneMonthPerformance.toFixed(2)}%` : "N/A"}
+                <div style={{ fontSize: 13, fontWeight: 600, color: md.oneMonthPerformance == null ? "#94a3b8" : md.oneMonthPerformance >= 0 ? "#059669" : "#e11d48" }}>
+                  {md.oneMonthPerformance != null ? `${md.oneMonthPerformance > 0 ? "+" : ""}${md.oneMonthPerformance.toFixed(2)}%` : technicalDataHint}
                 </div>
               </div>
               {data.position && (

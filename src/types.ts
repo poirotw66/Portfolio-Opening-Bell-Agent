@@ -16,6 +16,7 @@ export interface MarketData {
   rsi14?: number | null;
   oneMonthPerformance?: number | null;
   history?: { date: string; close: number }[];
+  technicalDataError?: string;
 }
 
 export interface NewsItem {
