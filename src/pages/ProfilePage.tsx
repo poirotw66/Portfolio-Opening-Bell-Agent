@@ -40,7 +40,7 @@ export function ProfilePage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="w-full max-w-none mx-auto space-y-8">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -61,8 +61,8 @@ export function ProfilePage() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div className="md:col-span-1 space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 w-full min-w-0">
+        <div className="lg:col-span-3 space-y-6">
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
             <h2 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
               <Target className="w-5 h-5 text-indigo-600" />
@@ -97,7 +97,7 @@ export function ProfilePage() {
           </div>
         </div>
 
-        <div className="md:col-span-2">
+        <div className="lg:col-span-9 min-w-0">
           <PortfolioInput 
             onSave={handlePortfolioSave} 
             isLoading={false} 

@@ -201,9 +201,9 @@ export function SavedReportsPage() {
   );
 
   return (
-    <div className="flex flex-col md:flex-row gap-6 h-[calc(100vh-8rem)]">
+    <div className="flex flex-1 min-h-0 flex-col lg:flex-row gap-6 w-full">
       {/* ── Sidebar ── */}
-      <div className="w-full md:w-1/3 flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="w-full lg:w-[min(22rem,28vw)] shrink-0 flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden min-h-0 lg:max-h-full lg:h-full">
         <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-indigo-600" />
@@ -316,7 +316,7 @@ export function SavedReportsPage() {
       </div>
 
       {/* ── Main Content ── */}
-      <div className="w-full md:w-2/3 flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="flex-1 min-h-0 min-w-0 flex flex-col bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden lg:h-full">
         {selectedReport ? (
           <div className="flex-1 overflow-y-auto p-6">
             <div className="mb-6 pb-6 border-b border-slate-100">

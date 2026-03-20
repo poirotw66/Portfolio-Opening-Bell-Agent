@@ -103,7 +103,7 @@ export function PortfolioSummaryPage() {
       )}
 
       {(!isLoading || marketData.length > 0) && savedPositions.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8 max-w-3xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8 w-full max-w-none">
           <div className="flex items-center gap-2 mb-8 text-slate-700 font-medium">
             <span>庫存現值比例</span>
             <span className="text-slate-300">|</span>

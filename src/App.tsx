@@ -14,9 +14,9 @@ export default function App() {
 
   return (
     <BrowserRouter basename={import.meta.env.BASE_URL}>
-      <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900">
-        <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div className="min-h-dvh w-full flex flex-col bg-slate-50 text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900">
+        <header className="shrink-0 bg-white border-b border-slate-200 sticky top-0 z-10">
+          <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 h-16 flex items-center justify-between gap-4">
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
@@ -101,14 +101,16 @@ export default function App() {
           </div>
         </header>
 
-        <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <Routes>
-            <Route path="/" element={<AnalysisPage />} />
-            <Route path="/market" element={<MarketPage />} />
-            <Route path="/summary" element={<PortfolioSummaryPage />} />
-            <Route path="/saved-reports" element={<SavedReportsPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
-          </Routes>
+        <main className="flex-1 w-full min-h-0 flex flex-col px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 py-6 lg:py-8">
+          <div className="flex-1 min-h-0 w-full flex flex-col min-w-0">
+            <Routes>
+              <Route path="/" element={<AnalysisPage />} />
+              <Route path="/market" element={<MarketPage />} />
+              <Route path="/summary" element={<PortfolioSummaryPage />} />
+              <Route path="/saved-reports" element={<SavedReportsPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
+            </Routes>
+          </div>
         </main>
         
         <SettingsModal 

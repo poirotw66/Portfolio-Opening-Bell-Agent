@@ -27,7 +27,7 @@ export function MarketGrid({ data, positions, isLoading }: Props) {
         <h2 className="text-lg font-bold text-slate-900 tracking-tight">即時行情庫存</h2>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
         {data.map((item) => {
           const position = positions.find(p => p.ticker === item.ticker);
           const isUp = item.changePercent >= 0;
