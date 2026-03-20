@@ -19,6 +19,108 @@ const STRATEGY_LABELS: Record<InvestmentStrategy, string> = {
 
 /** Max length per dashboard text field to avoid runaway output. */
 const DASHBOARD_FIELD_MAX_LENGTH = 200;
+const DASHBOARD_SUMMARY_MAX_LENGTH = 30;
+const DASHBOARD_TEXT_FALLBACK = "數據不足，無法評估";
+const SHORT_TEXT_FIELD_PATHS = new Set([
+  "trend_prediction",
+  "operation_advice",
+  "confidence_level",
+  "dashboard.core_conclusion.one_sentence",
+  "dashboard.core_conclusion.signal_type",
+  "dashboard.core_conclusion.time_sensitivity",
+  "dashboard.core_conclusion.position_advice.no_position",
+  "dashboard.core_conclusion.position_advice.has_position",
+  "dashboard.data_perspective.trend_status.ma_alignment",
+  "dashboard.data_perspective.price_position.bias_status",
+  "dashboard.data_perspective.volume_analysis.volume_status",
+  "dashboard.data_perspective.volume_analysis.volume_meaning",
+  "dashboard.data_perspective.chip_structure.chip_health",
+  "dashboard.intelligence.latest_news",
+  "dashboard.intelligence.risk_alerts[]",
+  "dashboard.intelligence.positive_catalysts[]",
+  "dashboard.intelligence.earnings_outlook",
+  "dashboard.intelligence.sentiment_summary",
+  "dashboard.battle_plan.sniper_points.ideal_buy",
+  "dashboard.battle_plan.sniper_points.secondary_buy",
+  "dashboard.battle_plan.sniper_points.stop_loss",
+  "dashboard.battle_plan.sniper_points.take_profit",
+  "dashboard.battle_plan.position_strategy.suggested_position",
+  "dashboard.battle_plan.position_strategy.entry_plan",
+  "dashboard.battle_plan.position_strategy.risk_control",
+  "dashboard.battle_plan.action_checklist[]",
+]);
+
+function normalizePath(path: string): string {
+  return path.replace(/\[\d+\]/g, "[]");
+}
+
+function stripPromptLeakage(text: string): string {
+  return text
+    .replace(/這是一句話結論，?字數嚴格限制在三十字以內。?/gu, " ")
+    .replace(/這是一句話結論。?/gu, " ")
+    .replace(/字數嚴格限制在三十字以內。?/gu, " ")
+    .replace(/一句話結論/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizePunctuationSpacing(text: string): string {
+  return text
+    .replace(/\s*([，。！？；：,.;:!?])/gu, "$1")
+    .replace(/\(\s+/g, "(")
+    .replace(/\s+\)/g, ")")
+    .trim();
+}
+
+function keepFirstSentence(text: string): string {
+  const lineBreakIndex = text.search(/[\r\n]/u);
+  const sentenceEndIndex = text.search(/[。！？!?]/u);
+  const cutIndex =
+    lineBreakIndex >= 0 && sentenceEndIndex >= 0
+      ? Math.min(lineBreakIndex, sentenceEndIndex + 1)
+      : lineBreakIndex >= 0
+        ? lineBreakIndex
+        : sentenceEndIndex >= 0
+          ? sentenceEndIndex + 1
+          : -1;
+
+  return cutIndex >= 0 ? text.slice(0, cutIndex).trim() : text.trim();
+}
+
+function truncateCleanly(text: string, maxLength: number): string {
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  const truncated = text
+    .slice(0, maxLength)
+    .replace(/[，、；：,.;:。！？!?\s]+$/gu, "")
+    .trim();
+
+  return truncated || text.slice(0, maxLength).trim();
+}
+
+function collapseToClauses(text: string, maxLength: number): string {
+  const clauses = text
+    .split(/[，、；,;]/u)
+    .map((clause) => clause.trim())
+    .filter(Boolean);
+
+  if (clauses.length === 0) {
+    return text.trim();
+  }
+
+  let conciseText = clauses[0];
+  for (const clause of clauses.slice(1)) {
+    const candidate = `${conciseText}，${clause}`;
+    if (candidate.length > maxLength) {
+      break;
+    }
+    conciseText = candidate;
+  }
+
+  return conciseText;
+}
 
 /**
  * Collapse consecutive repetition of any phrase (e.g. "數據不足，無法評估。" x N,
@@ -48,7 +150,43 @@ function cleanRepetitiveSentences(text: string): string {
   return cleaned.trim();
 }
 
-function sanitizeDashboardText(node: unknown): void {
+function normalizeDashboardString(text: string, path: string): string {
+  const normalizedPath = normalizePath(path);
+  let cleaned = stripPromptLeakage(cleanRepetitiveSentences(text));
+  cleaned = normalizePunctuationSpacing(cleaned);
+
+  if (SHORT_TEXT_FIELD_PATHS.has(normalizedPath)) {
+    cleaned = keepFirstSentence(cleaned);
+
+    if (cleaned.length > DASHBOARD_SUMMARY_MAX_LENGTH) {
+      cleaned = collapseToClauses(cleaned, DASHBOARD_SUMMARY_MAX_LENGTH);
+    }
+
+    cleaned = truncateCleanly(cleaned, DASHBOARD_SUMMARY_MAX_LENGTH);
+    return cleaned || DASHBOARD_TEXT_FALLBACK;
+  }
+
+  if (cleaned.length > DASHBOARD_FIELD_MAX_LENGTH) {
+    cleaned = truncateCleanly(cleaned, DASHBOARD_FIELD_MAX_LENGTH);
+  }
+
+  return cleaned || DASHBOARD_TEXT_FALLBACK;
+}
+
+function sanitizeDashboardText(node: unknown, path = ""): void {
+  if (Array.isArray(node)) {
+    for (let index = 0; index < node.length; index += 1) {
+      const value = node[index];
+      const currentPath = `${path}[${index}]`;
+      if (typeof value === "string") {
+        node[index] = normalizeDashboardString(value, currentPath);
+      } else {
+        sanitizeDashboardText(value, currentPath);
+      }
+    }
+    return;
+  }
+
   if (!node || typeof node !== 'object') {
     return;
   }
@@ -56,10 +194,11 @@ function sanitizeDashboardText(node: unknown): void {
   const obj = node as Record<string, unknown>;
   for (const key of Object.keys(obj)) {
     const value = obj[key];
+    const currentPath = path ? `${path}.${key}` : key;
     if (typeof value === 'string') {
-      obj[key] = cleanRepetitiveSentences(value);
+      obj[key] = normalizeDashboardString(value, currentPath);
     } else if (value && typeof value === 'object') {
-      sanitizeDashboardText(value);
+      sanitizeDashboardText(value, currentPath);
     }
   }
 }

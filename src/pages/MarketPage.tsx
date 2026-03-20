@@ -1,4 +1,3 @@
-import React from "react";
 import { MarketGrid } from "../components/MarketGrid";
 import { AlertCircle, RefreshCw } from "lucide-react";
 import { usePortfolioMarketData } from "../hooks/usePortfolioMarketData";

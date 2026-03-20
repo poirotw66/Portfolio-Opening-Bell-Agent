@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
 import { Activity, TrendingUp, BarChart3, LineChart, PieChart, Settings } from "lucide-react";
 import { AnalysisPage } from "./pages/AnalysisPage";

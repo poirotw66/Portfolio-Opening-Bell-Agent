@@ -1,13 +1,11 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { AlertCircle, Newspaper, Briefcase, Search, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
-import PortfolioInput from "../components/PortfolioInput";
 import { SingleStockInput } from "../components/SingleStockInput";
 import ReportDisplay from "../components/ReportDisplay";
 import {
   Position,
   PositionAnalytics,
-  NewsItem,
   SavedReport,
   DecisionDashboard,
   InvestmentStrategy,
@@ -21,7 +19,6 @@ export function AnalysisPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [report, setReport] = useState<string>("");
   const [error, setError] = useState<string>("");
-  const [newsData, setNewsData] = useState<Record<string, NewsItem[]>>({});
 
   const [activeTab, setActiveTab] = useState<'portfolio' | 'singleStock'>('portfolio');
   const [singleStockReport, setSingleStockReport] = useState<string>("");
@@ -74,7 +71,6 @@ export function AnalysisPage() {
     setIsLoading(true);
     setError("");
     setReport("");
-    setNewsData({});
     setActiveTab('portfolio');
 
     try {
@@ -91,8 +87,6 @@ export function AnalysisPage() {
         fetchNews(tickers),
         fetchMarketContext(),
       ]);
-
-      setNewsData(news);
 
       setAnalysisStatus("正在整理投資組合部位...");
       // Calculate analytics

@@ -1,5 +1,3 @@
-import React from "react";
-import { Position, MarketData } from "../types";
 import { AlertCircle, RefreshCw, PieChart as PieChartIcon } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { usePortfolioMarketData } from "../hooks/usePortfolioMarketData";
@@ -131,8 +129,12 @@ export function PortfolioSummaryPage() {
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip 
-                    formatter={(value: number) => `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                  <Tooltip
+                    formatter={(value: unknown) => {
+                      const rawValue = Array.isArray(value) ? value[0] : value;
+                      const numericValue = typeof rawValue === "number" ? rawValue : Number(rawValue ?? 0);
+                      return `$${numericValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                    }}
                   />
                 </PieChart>
               </ResponsiveContainer>

@@ -3,7 +3,7 @@ import { Position } from "../types";
 import { Plus, Trash2, Upload, Code, List, Save } from "lucide-react";
 
 interface Props {
-  onSave: (positions: Position[]) => void;
+  onSave: (positions?: Position[]) => void;
   isLoading: boolean;
   onTickersChange?: (tickers: string[]) => void;
 }

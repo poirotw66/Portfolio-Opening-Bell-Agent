@@ -1,4 +1,3 @@
-import React from 'react';
 import { MarketData, Position } from '../types';
 import { ArrowUpRight, ArrowDownRight, Activity } from 'lucide-react';
 

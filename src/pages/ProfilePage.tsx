@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { User, Shield, Target, Save, CheckCircle2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { User, Shield, Target, CheckCircle2 } from "lucide-react";
 import PortfolioInput from "../components/PortfolioInput";
-import { Position, InvestmentStrategy } from "../types";
+import { InvestmentStrategy } from "../types";
 import { motion } from "motion/react";
 
 const STRATEGIES: { id: InvestmentStrategy; label: string; description: string }[] = [
@@ -30,9 +30,7 @@ export function ProfilePage() {
     showSaveFeedback();
   };
 
-  const handlePortfolioSave = (positions: Position[]) => {
-    // PortfolioInput already saves to localStorage 'portfolio'
-    // but we can add feedback here
+  const handlePortfolioSave = () => {
     showSaveFeedback();
   };
 
