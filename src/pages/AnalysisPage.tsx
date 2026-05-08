@@ -14,6 +14,8 @@ import {
 import { fetchMarketData, fetchNews, fetchMarketContext } from "../services/marketService";
 import { generateOpeningBellBrief, generateSingleStockDashboard, generateSingleStockBrief } from "../services/geminiService";
 import { DecisionDashboardDisplay } from "../components/DecisionDashboardDisplay";
+import { STORAGE_KEYS, ERROR_MESSAGES } from "../constants";
+import { getErrorMessage } from "../utils/errorHandler";
 
 export function AnalysisPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -31,7 +33,7 @@ export function AnalysisPage() {
   const [savedPositions, setSavedPositions] = useState<Position[]>([]);
 
   useEffect(() => {
-    const saved = localStorage.getItem('portfolio');
+    const saved = localStorage.getItem(STORAGE_KEYS.PORTFOLIO);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -45,7 +47,7 @@ export function AnalysisPage() {
   }, []);
 
   const handleAnalyze = async () => {
-    const saved = localStorage.getItem('portfolio');
+    const saved = localStorage.getItem(STORAGE_KEYS.PORTFOLIO);
     let currentPositions = savedPositions;
     
     if (saved) {
@@ -56,15 +58,15 @@ export function AnalysisPage() {
     }
 
     if (currentPositions.length === 0) {
-      setError("請先在「個人設定」中設定您的投資組合部位。");
+      setError(ERROR_MESSAGES.NO_PORTFOLIO);
       return;
     }
 
     const apiKey =
-      localStorage.getItem("customGeminiApiKey") ||
+      localStorage.getItem(STORAGE_KEYS.CUSTOM_GEMINI_API_KEY) ||
       (import.meta.env?.VITE_GEMINI_API_KEY as string | undefined);
     if (!apiKey?.trim()) {
-      setError("請先在「系統設定」中設定 Gemini API Key（或於 .env.local 設定 VITE_GEMINI_API_KEY）。");
+      setError(ERROR_MESSAGES.NO_API_KEY);
       return;
     }
 
@@ -75,7 +77,7 @@ export function AnalysisPage() {
 
     try {
       const tickers = currentPositions.map((p) => p.ticker);
-      const strategyRaw = localStorage.getItem("investmentStrategy") ?? "growth";
+      const strategyRaw = localStorage.getItem(STORAGE_KEYS.INVESTMENT_STRATEGY) ?? "growth";
       const strategy: InvestmentStrategy = isInvestmentStrategy(strategyRaw)
         ? strategyRaw
         : "growth";
@@ -127,28 +129,12 @@ export function AnalysisPage() {
         tickers
       };
       
-      const savedReports = localStorage.getItem('savedReports');
+      const savedReports = localStorage.getItem(STORAGE_KEYS.SAVED_REPORTS);
       const reports: SavedReport[] = savedReports ? JSON.parse(savedReports) : [];
       reports.unshift(newReport);
-      localStorage.setItem('savedReports', JSON.stringify(reports));
+      localStorage.setItem(STORAGE_KEYS.SAVED_REPORTS, JSON.stringify(reports));
     } catch (err: unknown) {
-      let errorMessage =
-        err instanceof Error ? err.message : "分析過程中發生錯誤。";
-      if (
-        errorMessage.includes("429") ||
-        errorMessage.includes("RESOURCE_EXHAUSTED") ||
-        errorMessage.includes("quota")
-      ) {
-        errorMessage =
-          "API 請求次數已達上限 (Quota Exceeded)。請稍後再試，或在「系統設定」中更換您的自訂 Gemini API Key。";
-      } else if (
-        errorMessage.includes("abort") ||
-        errorMessage.includes("AbortError")
-      ) {
-        errorMessage =
-          "請求逾時或已中斷。請檢查網路連線後再試，若組合檔數較多可稍後再試。";
-      }
-      setError(errorMessage);
+      setError(getErrorMessage(err));
     } finally {
       setIsLoading(false);
       setAnalysisStatus("");
@@ -159,12 +145,10 @@ export function AnalysisPage() {
 
   const handleSingleStockAnalyze = async (ticker: string) => {
     const apiKey =
-      localStorage.getItem("customGeminiApiKey") ||
+      localStorage.getItem(STORAGE_KEYS.CUSTOM_GEMINI_API_KEY) ||
       (import.meta.env?.VITE_GEMINI_API_KEY as string | undefined);
     if (!apiKey?.trim()) {
-      setSingleStockError(
-        "請先在「系統設定」中設定 Gemini API Key（或於 .env.local 設定 VITE_GEMINI_API_KEY）。"
-      );
+      setSingleStockError(ERROR_MESSAGES.NO_API_KEY);
       return;
     }
 
@@ -186,16 +170,16 @@ export function AnalysisPage() {
       setAnalysisStatus("正在分析市場情報與新聞...");
       const data = marketData[0];
       if (!data) {
-        throw new Error(`無法取得 ${ticker} 的市場數據，請確認代號是否正確。`);
+        throw new Error(ERROR_MESSAGES.INVALID_TICKER);
       }
       if (data.error) {
-        throw new Error(`無法取得 ${ticker} 的市場數據`);
+        throw new Error(ERROR_MESSAGES.FETCH_FAILED);
       }
 
       const tickerNews = news[ticker] || [];
       
       // Get latest positions for context
-      const saved = localStorage.getItem('portfolio');
+      const saved = localStorage.getItem(STORAGE_KEYS.PORTFOLIO);
       let currentPositions = savedPositions;
       if (saved) {
         try {
@@ -205,7 +189,7 @@ export function AnalysisPage() {
       }
       
       const position = currentPositions.find((p) => p.ticker === ticker);
-      const strategyRaw = localStorage.getItem("investmentStrategy") ?? "growth";
+      const strategyRaw = localStorage.getItem(STORAGE_KEYS.INVESTMENT_STRATEGY) ?? "growth";
       const strategy: InvestmentStrategy = isInvestmentStrategy(strategyRaw)
         ? strategyRaw
         : "growth";
@@ -246,28 +230,13 @@ export function AnalysisPage() {
         tickers: [ticker.toUpperCase()]
       };
       
-      const savedReports = localStorage.getItem('savedReports');
+      const savedReports = localStorage.getItem(STORAGE_KEYS.SAVED_REPORTS);
       const reports: SavedReport[] = savedReports ? JSON.parse(savedReports) : [];
       reports.unshift(newReport);
-      localStorage.setItem('savedReports', JSON.stringify(reports));
+      localStorage.setItem(STORAGE_KEYS.SAVED_REPORTS, JSON.stringify(reports));
 
     } catch (err: unknown) {
-      let errorMessage =
-        err instanceof Error ? err.message : "分析過程中發生錯誤。";
-      if (
-        errorMessage.includes("429") ||
-        errorMessage.includes("RESOURCE_EXHAUSTED") ||
-        errorMessage.includes("quota")
-      ) {
-        errorMessage =
-          "API 請求次數已達上限 (Quota Exceeded)。請稍後再試，或在「系統設定」中更換您的自訂 Gemini API Key。";
-      } else if (
-        errorMessage.includes("abort") ||
-        errorMessage.includes("AbortError")
-      ) {
-        errorMessage = "請求逾時或已中斷。請檢查網路連線後再試。";
-      }
-      setSingleStockError(errorMessage);
+      setSingleStockError(getErrorMessage(err));
     } finally {
       setIsSingleStockLoading(false);
     }

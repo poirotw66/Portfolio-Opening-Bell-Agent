@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Position, MarketData } from "../types";
 import { fetchMarketData } from "../services/marketService";
+import { STORAGE_KEYS } from "../constants";
+import { logError } from "../utils/errorHandler";
 
 interface UsePortfolioMarketDataResult {
   positions: Position[];
@@ -17,7 +19,7 @@ export function usePortfolioMarketData(): UsePortfolioMarketDataResult {
   const [error, setError] = useState<string>("");
 
   const loadPortfolioAndMarketData = useCallback(async () => {
-    const saved = localStorage.getItem("portfolio");
+    const saved = localStorage.getItem(STORAGE_KEYS.PORTFOLIO);
     if (!saved) {
       setPositions([]);
       setMarketData([]);
@@ -44,16 +46,13 @@ export function usePortfolioMarketData(): UsePortfolioMarketDataResult {
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "無法取得市場數據";
-        // Keep console for debugging but avoid breaking UI
-        // eslint-disable-next-line no-console
-        console.error(err);
+        logError(err, "Portfolio market data fetch failed");
         setError(message);
       } finally {
         setIsLoading(false);
       }
     } catch (parseError) {
-      // eslint-disable-next-line no-console
-      console.error("Failed to parse portfolio", parseError);
+      logError(parseError, "Failed to parse portfolio");
       setPositions([]);
       setMarketData([]);
       setError("無法讀取已儲存的投資組合資料");

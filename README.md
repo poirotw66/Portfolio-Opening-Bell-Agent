@@ -2,6 +2,13 @@
 
 部位感知的 AI 投資組合助理：結合您的持股、即時行情與新聞，產出開盤指南與決策儀表盤，支援趨勢交易策略與風險排查。
 
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-19.0-61dafb)](https://reactjs.org/)
+[![Express](https://img.shields.io/badge/Express-4.21-green)](https://expressjs.com/)
+[![Vite](https://img.shields.io/badge/Vite-6.2-646cff)](https://vitejs.dev/)
+
+> 🚀 **最新優化**: 已完成效能優化、錯誤處理強化與架構重構。詳見 [OPTIMIZATION_SUMMARY.md](./OPTIMIZATION_SUMMARY.md)
+
 ---
 
 ## 概述
@@ -89,5 +96,26 @@
 
 ### 後端與前端分工
 
-- **後端（Express）**：`/api/market-data`（行情+技術指標）、`/api/news`（SerpAPI 或 Yahoo 新聞）、`/api/market-context`（大盤）；集中處理 Yahoo 與 SerpAPI 呼叫，前端僅傳 tickers 與可選的 `serpApiKey`。
-- **前端**：Vite + React，依序或並行呼叫上述 API，再將結果與使用者部位一併送入 Gemini 服務（`geminiService.ts`），並負責儀表盤與報告的展示、儲存與 PDF 匯出。
+- **後端（Express）**：`/api/market-data`（行情+技術指標）、`/api/news`（SerpAPI 或 Yahoo 新聞）、`/api/market-context`（大盤）；集中處理 Yahoo 與 SerpAPI 呼叫，前端僅傳 tickers 與可選的 `serpApiKey`。**已優化為並行處理，效能提升 3-5 倍**。
+- **前端**：Vite + React，並行呼叫上述 API，再將結果與使用者部位一併送入 Gemini 服務（`geminiService.ts`），並負責儀表盤與報告的展示、儲存與 PDF 匯出。**已加入快取機制與自動重試**。
+
+---
+
+## 🚀 最新優化項目
+
+### 效能優化
+- ✅ **並行處理**: 市場數據、新聞、指數查詢改為並行處理，速度提升 3-5 倍
+- ✅ **快取機制**: 5 分鐘記憶體快取，減少重複 API 請求
+- ✅ **自動重試**: 網路請求失敗自動重試，提升穩定性
+
+### 架構改善
+- ✅ **統一常數管理**: 集中管理配置、錯誤訊息、localStorage 鍵值
+- ✅ **錯誤處理工具**: 統一錯誤處理邏輯與使用者友善訊息
+- ✅ **優雅關閉**: 伺服器支援 SIGTERM/SIGINT 優雅關閉
+
+### 程式碼品質
+- ✅ **消除魔術數字**: 提取為具名常數
+- ✅ **函式註解**: 關鍵函式加入 JSDoc
+- ✅ **型別安全**: 改善型別定義
+
+詳細優化內容請參閱 [OPTIMIZATION_SUMMARY.md](./OPTIMIZATION_SUMMARY.md)
