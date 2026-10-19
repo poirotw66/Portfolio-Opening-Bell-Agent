@@ -1,121 +1,117 @@
 # Portfolio Opening Bell Agent
 
-部位感知的 AI 投資組合助理：結合您的持股、即時行情與新聞，產出開盤指南與決策儀表盤，支援趨勢交易策略與風險排查。
+[English](./README.md) | [繁體中文](./README.zh-TW.md)
+
+**Live demo:** [https://portfolio-opening-bell-agent.onrender.com/](https://portfolio-opening-bell-agent.onrender.com/)  
+*(First load may take ~30 seconds due to Render free-tier cold start.)*
+
+A position-aware AI portfolio assistant: combine your holdings, live market data, and news to produce opening-bell briefs and decision dashboards, with trend-trading guidance and risk checks.
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19.0-61dafb)](https://reactjs.org/)
 [![Express](https://img.shields.io/badge/Express-4.21-green)](https://expressjs.com/)
 [![Vite](https://img.shields.io/badge/Vite-6.2-646cff)](https://vitejs.dev/)
 
-> 🚀 **最新優化**: 已完成效能優化、錯誤處理強化與架構重構。詳見 [OPTIMIZATION_SUMMARY.md](./OPTIMIZATION_SUMMARY.md)
+> Performance, error-handling, and architecture notes: [OPTIMIZATION_SUMMARY.md](./OPTIMIZATION_SUMMARY.md)
+
+> **Disclaimer:** This project is for educational and demonstration purposes only. It is **not investment advice**. Always do your own research before making financial decisions.
 
 ---
 
-## 概述
+## Overview
 
-- **分析中心**：輸入投資組合或單一標的，一鍵產生開盤報告或單股決策儀表盤。
-- **部位感知 AI**：依您的持股（張數、均價）與即時市價，計算損益與報酬率，並在分析中納入部位情境。
-- **決策儀表盤（單股）**：趨勢狀態、均線與乖離、買/賣/觀望建議、風險點、支撐壓力、成交量等，以結構化卡片與圖表呈現。
-- **投資組合開盤報告**：針對多檔持股的 AI 開盤摘要，含新聞與市場脈動。
-- **即時行情庫存**：以您儲存的投資組合為基礎，顯示各標的即時價、漲跌、與均價比較。
-- **帳務總覽**：投資組合總成本、總市值、損益與報酬率，並以圓餅圖呈現部位占比。
-- **歷史報告**：儲存單股/組合報告，支援檢視、下載 PDF、匯出 ZIP。
-- **個人設定**：維護投資組合（代號、股數、均價）、投資策略（成長/價值/平衡）；系統設定可自訂 Gemini API Key。
+- **Analysis hub**: Enter a portfolio or a single ticker to generate an opening report or a single-stock decision dashboard.
+- **Position-aware AI**: Uses your holdings (shares, average cost) and live prices to compute P&L and returns, and folds that context into the analysis.
+- **Decision dashboard (single stock)**: Trend state, moving averages and deviation, buy/sell/hold suggestion, risk points, support/resistance, volume, and more—shown as structured cards and charts.
+- **Portfolio opening report**: AI opening summary across multiple holdings, including news and market pulse.
+- **Live quotes inventory**: Real-time price, change, and comparison to average cost for each saved position.
+- **Account overview**: Portfolio cost, market value, P&L, return, and allocation pie chart.
+- **Saved reports**: Store single-stock or portfolio reports; view, download PDF, or export ZIP.
+- **Settings**: Maintain portfolio (ticker, shares, average cost) and strategy (growth/value/balanced); optional custom Gemini API key in system settings.
 
+### Analysis hub
 
-### 分析中心
-<!-- 股票配置 -->
-![股票配置](screenshots/screenshot-profile.png)
+![Stock profile](screenshots/screenshot-profile.png)
 
-<!-- 分析中心首頁 -->
-![分析中心](screenshots/screenshot-analysis-home.png)
+![Analysis hub](screenshots/screenshot-analysis-home.png)
 
-### 單股決策儀表盤
+### Single-stock decision dashboard
 
-<!-- 單股分析結果 -->
-![決策儀表盤](screenshots/screenshot-decision-dashboard.png)
+![Decision dashboard](screenshots/screenshot-decision-dashboard.png)
 
-![完整單股決策儀表板參考](./example/20260313_single-stock_Apple.pdf)
-### 投資組合開盤報告
+[Full single-stock decision dashboard example (PDF)](./example/20260313_single-stock_Apple.pdf)
 
-<!-- 組合報告 -->
-![開盤報告](screenshots/screenshot-portfolio-report.png)
+### Portfolio opening report
 
-![完整開盤報告參考](./example/20260313_single-stock_Apple.pdf)
+![Opening report](screenshots/screenshot-portfolio-report.png)
 
-### 即時行情與帳務
+[Full portfolio opening report example (Markdown)](./example/20260313_portfolio.md)
 
-<!-- 行情庫存 -->
-![即時行情庫存](screenshots/screenshot-market-grid.png)
+### Live quotes and account overview
 
-<!-- 帳務總覽 -->
-![帳務總覽](screenshots/screenshot-portfolio-summary.png)
+![Live quotes inventory](screenshots/screenshot-market-grid.png)
+
+![Account overview](screenshots/screenshot-portfolio-summary.png)
 
 ---
 
-## 本地執行（Run Locally）
+## Run locally
 
-**環境需求：** Node.js
+**Requirements:** Node.js **>= 20** (required by `yahoo-finance2` and `@google/genai`; Vite 6 also supports 18/20/22+)
 
-1. 安裝依賴：
+1. Install dependencies:
    ```bash
    npm install
    ```
-2. 建立 `.env.local` 並設定：
+2. Create `.env.local` with:
    ```
    VITE_GEMINI_API_KEY=<your_gemini_api_key>
    ```
-3. 啟動開發伺服器：
+3. Start the development server:
    ```bash
    npm run dev
    ```
 
-亦可於應用內「系統設定」中填入自訂 Gemini API Key，無需寫入 `.env.local`。
+You can also paste a custom Gemini API key in the in-app System Settings instead of using `.env.local`.
+
+**Production-style start** (serves the built app when `NODE_ENV=production`):
+
+```bash
+npm run build
+NODE_ENV=production npm start
+```
+
+`npm start` runs `tsx server.ts` (same TypeScript runner as `dev`).
 
 ---
 
-## 技術架構與資料流
+## Architecture and data flow
 
-### 資料來源與 API 整合
+### Data sources and API integration
 
-- **行情與技術指標（股票現狀）**  
-  後端使用 **Yahoo Finance（yahoo-finance2）** 取得即時與歷史資料，供 AI 分析「股票現狀」：
-  - **即時報價**：`quote(ticker)` — 現價、漲跌、漲跌幅、成交量、市值。
-  - **歷史 K 線**：近 60 日日線，用於計算 **SMA20**、**RSI(14)**、**近一個月報酬率**，並產出價格走勢圖資料。
-  - **大盤情境**：`/api/market-context` 取得 NASDAQ (^IXIC)、S&P 500 (^GSPC) 指數漲跌幅，作為市場氛圍脈絡。
+- **Quotes and technicals**  
+  The backend uses **Yahoo Finance (`yahoo-finance2`)** for live and historical data used in “stock status” analysis:
+  - **Live quote**: `quote(ticker)` — price, change, volume, market cap.
+  - **Daily candles**: last ~60 days for **SMA20**, **RSI(14)**, **~1-month return**, and chart series.
+  - **Market context**: `/api/market-context` for NASDAQ (^IXIC) and S&P 500 (^GSPC) as market mood.
 
-- **最新消息**  
-  新聞來源採 **Gemini + 外部新聞 API** 雙軌：
-  - **SERP API（SerpAPI）**：若在系統設定中填入 Serp API Key，後端會以 Google 新聞搜尋（`engine=google&tbm=nws`）取得各標的最新相關新聞（每標的最多 3 筆），再連同行情一併送入 Gemini 做摘要與風險提示。
-  - **Yahoo Finance 新聞**：未設定 Serp API Key 時，改以 `yahooFinance.search(ticker, { newsCount: 3 })` 取得該標的新聞，同樣彙整後交給 Gemini。
+- **News**  
+  Dual path via **Gemini + external news APIs**:
+  - **SerpAPI**: If a Serp API key is set in System Settings, the backend searches Google News (`engine=google&tbm=nws`) for up to 3 articles per ticker, then sends them with quotes to Gemini.
+  - **Yahoo Finance news**: Without a Serp key, falls back to `yahooFinance.search(ticker, { newsCount: 3 })`.
 
-- **AI 分析（Gemini）**  
-  - **單股決策儀表盤**：將「即時報價 + SMA20/RSI/近月績效 + 新聞 + 大盤情境 + 使用者部位（可選）」組成 prompt，搭配 **structured output（responseSchema）** 產出 JSON 儀表盤（趨勢、買賣建議、風險、支撐壓力等）；system instruction 內建嚴進策略、趨勢交易、籌碼與買點規則，並要求繁體中文、禁止幻覺與重複句。
-  - **投資組合開盤報告**：對多檔持股並行拉取行情與新聞，再呼叫 Gemini 產出開盤摘要與建議。
-  - API Key 可來自 `VITE_GEMINI_API_KEY` 或應用內「系統設定」的自訂 Key；模型可選（例如 `gemini-3-flash-preview`）。
+- **AI analysis (Gemini)**  
+  - **Single-stock dashboard**: Prompt built from quote + SMA20/RSI/recent performance + news + market context + optional position; **structured output (`responseSchema`)** returns JSON (trend, action, risks, levels, etc.). System instructions encode strict entry rules, trend trading, and Traditional Chinese output with anti-hallucination constraints.
+  - **Portfolio opening report**: Parallel quote/news fetch for holdings, then Gemini summary and suggestions.
+  - API key from `VITE_GEMINI_API_KEY` or in-app custom key; model is selectable (e.g. `gemini-3-flash-preview`).
 
-### 後端與前端分工
+### Backend vs frontend
 
-- **後端（Express）**：`/api/market-data`（行情+技術指標）、`/api/news`（SerpAPI 或 Yahoo 新聞）、`/api/market-context`（大盤）；集中處理 Yahoo 與 SerpAPI 呼叫，前端僅傳 tickers 與可選的 `serpApiKey`。**已優化為並行處理，效能提升 3-5 倍**。
-- **前端**：Vite + React，並行呼叫上述 API，再將結果與使用者部位一併送入 Gemini 服務（`geminiService.ts`），並負責儀表盤與報告的展示、儲存與 PDF 匯出。**已加入快取機制與自動重試**。
+- **Backend (Express)**: `/api/market-data`, `/api/news`, `/api/market-context`—Yahoo and SerpAPI calls stay on the server; the client sends tickers and an optional `serpApiKey`. Requests run in parallel for better throughput.
+- **Frontend**: Vite + React fetches those APIs in parallel, then calls Gemini (`geminiService.ts`) and renders dashboards, reports, storage, and PDF export. Includes caching and automatic retries.
 
 ---
 
-## 🚀 最新優化項目
+## License
 
-### 效能優化
-- ✅ **並行處理**: 市場數據、新聞、指數查詢改為並行處理，速度提升 3-5 倍
-- ✅ **快取機制**: 5 分鐘記憶體快取，減少重複 API 請求
-- ✅ **自動重試**: 網路請求失敗自動重試，提升穩定性
-
-### 架構改善
-- ✅ **統一常數管理**: 集中管理配置、錯誤訊息、localStorage 鍵值
-- ✅ **錯誤處理工具**: 統一錯誤處理邏輯與使用者友善訊息
-- ✅ **優雅關閉**: 伺服器支援 SIGTERM/SIGINT 優雅關閉
-
-### 程式碼品質
-- ✅ **消除魔術數字**: 提取為具名常數
-- ✅ **函式註解**: 關鍵函式加入 JSDoc
-- ✅ **型別安全**: 改善型別定義
-
-詳細優化內容請參閱 [OPTIMIZATION_SUMMARY.md](./OPTIMIZATION_SUMMARY.md)
+[MIT](./LICENSE) © 2026 poirotw66
